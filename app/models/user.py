@@ -29,3 +29,5 @@ class User(BaseModel):
 
     # Relationship to weather data (if user owns data)
     # weather_data = relationship("WeatherData", back_populates="owner")
+
+

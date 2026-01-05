@@ -14,7 +14,8 @@ from slowapi import Limiter
 from slowapi.util import get_remote_address
 
 from app.database import get_db
-from app.dependencies.auth import validate_api_key
+from app.dependencies.auth import get_api_key
+from app.models.api_key import APIKey
 from app.schemas.weather import ObservationResponse
 from app.crud.weather import station as station_crud, observation as observation_crud
 from app.utils.logging_config import get_logger
@@ -43,7 +44,7 @@ async def get_current_weather(
         examples=["Accra", "Kumasi", "DGAA"]
     ),
     db: AsyncSession = Depends(get_db),
-    api_key: str = Depends(validate_api_key),
+    api_key: APIKey = Depends(get_api_key),
 ):
     """
     Get current weather observations for a location.
@@ -169,7 +170,7 @@ async def get_historical_weather(
     limit: int = Query(1000, ge=1, le=10000, description="Maximum number of records to return"),
     skip: int = Query(0, ge=0, description="Number of records to skip"),
     db: AsyncSession = Depends(get_db),
-    api_key: str = Depends(validate_api_key),
+    api_key: APIKey = Depends(get_api_key),
 ):
     """
     Get historical weather data for a specified time period.
@@ -305,7 +306,7 @@ async def get_daily_forecast(
         le=10,
         description="Number of forecast days (1-10)"
     ),
-    api_key: str = Depends(validate_api_key),
+    api_key: APIKey = Depends(get_api_key),
 ):
     """
     Get daily weather forecast (Placeholder - Phase 2).

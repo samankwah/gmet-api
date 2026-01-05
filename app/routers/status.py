@@ -8,7 +8,8 @@ from fastapi import APIRouter, Depends, Request
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 
-from app.dependencies.auth import validate_api_key
+from app.dependencies.auth import get_api_key
+from app.models.api_key import APIKey
 
 router = APIRouter(
     prefix="/status",
@@ -25,7 +26,7 @@ limiter = Limiter(key_func=get_remote_address)
 @limiter.limit("60/minute")
 async def get_status(
     request: Request,
-    api_key: str = Depends(validate_api_key)
+    api_key: APIKey = Depends(get_api_key)
 ):
     """
     Get API status.
@@ -40,5 +41,6 @@ async def get_status(
     return {
         "status": "ok",
         "authenticated": True,
-        "api_key": api_key[:8] + "..."  # Show first 8 chars for security
+        "api_key_name": api_key.name,  # Show API key name
+        "api_key_role": api_key.role
     }

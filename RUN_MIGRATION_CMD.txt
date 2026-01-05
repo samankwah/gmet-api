@@ -1,0 +1,38 @@
+===========================================
+HOW TO RUN MIGRATION IN CMD (Command Prompt)
+===========================================
+
+IMPORTANT: You're using CMD, not PowerShell. Use these commands:
+
+Step 1: Activate Virtual Environment
+-------------------------------------
+venv\Scripts\activate.bat
+
+Step 2: Backup Database
+------------------------
+copy gmet_weather.db gmet_weather.db.backup
+
+Step 3: Check Current Migration
+--------------------------------
+python -m alembic current
+
+Step 4: Run Migration
+----------------------
+python -m alembic upgrade head
+
+Step 5: Verify
+---------------
+python -m alembic current
+
+===========================================
+COMPLETE COMMAND SEQUENCE (Copy all at once)
+===========================================
+
+venv\Scripts\activate.bat
+copy gmet_weather.db gmet_weather.db.backup
+python -m alembic current
+python -m alembic upgrade head
+python -m alembic current
+
+===========================================
+

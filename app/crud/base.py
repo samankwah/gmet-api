@@ -158,3 +158,5 @@ class CRUDBase(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
             select(self.model.id).where(self.model.id == id)
         )
         return result.scalars().first() is not None
+
+

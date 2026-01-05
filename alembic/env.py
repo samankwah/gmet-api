@@ -5,27 +5,39 @@ This file contains the configuration for Alembic migrations,
 including database connection and metadata setup.
 """
 
-import asyncio
 import sys
 import os
 from logging.config import fileConfig
 
 from sqlalchemy import engine_from_config
 from sqlalchemy import pool
-from sqlalchemy.ext.asyncio import AsyncEngine
 
 from alembic import context
 
 # Add the parent directory to the path so we can import the app module
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
-# Import our database models
-from app.database import Base
+# Import Base without triggering async engine creation
+# We need to import models first, then get Base
 from app.config import settings
 
 # Import all models to ensure they are registered with Base.metadata
 from app.models.user import User
-from app.models.weather_data import Station, Observation
+from app.models.api_key import APIKey
+from app.models.station import Station
+from app.models.synoptic_observation import SynopticObservation
+from app.models.daily_summary import DailySummary
+
+# Import Base after models (this will still trigger engine creation, but we'll work around it)
+# For SQLite migrations, we'll use a sync engine from alembic config instead
+from sqlalchemy.orm import declarative_base
+Base = declarative_base()
+
+# Import metadata from models
+from app.models.base import BaseModel
+# Copy metadata from the actual Base
+import app.database as db_module
+Base.metadata = db_module.Base.metadata
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
@@ -83,38 +95,23 @@ def do_run_migrations(connection):
         context.run_migrations()
 
 
-async def run_async_migrations():
-    """Run migrations in async mode."""
-
-    # Get the URL from alembic config
-    url = config.get_main_option("sqlalchemy.url")
-    if url:
-        # Convert SQLite URL for async
-        if url.startswith("sqlite:///"):
-            url = f"sqlite+aiosqlite:///{url[10:]}"
-        elif url.startswith("postgresql://"):
-            url = url.replace("postgresql://", "postgresql+asyncpg://")
-
-    connectable = AsyncEngine(
-        engine_from_config(
-            config.get_section(config.config_ini_section),
-            prefix="sqlalchemy.",
-            poolclass=pool.NullPool,
-            future=True,
-            url=url,
-        )
-    )
-
-    async with connectable.connect() as connection:
-        await connection.run_sync(do_run_migrations)
-
-    await connectable.dispose()
-
-
 def run_migrations_online() -> None:
-    """Run migrations in 'online' mode."""
-
-    asyncio.run(run_async_migrations())
+    """Run migrations in 'online' mode using sync engine for SQLite."""
+    
+    # For SQLite, use sync engine to avoid greenlet dependency issues
+    url = config.get_main_option("sqlalchemy.url")
+    
+    # Use sync engine for migrations (works better with SQLite)
+    connectable = engine_from_config(
+        config.get_section(config.config_ini_section),
+        prefix="sqlalchemy.",
+        poolclass=pool.NullPool,
+    )
+    
+    with connectable.connect() as connection:
+        do_run_migrations(connection)
+    
+    connectable.dispose()
 
 
 if context.is_offline_mode():

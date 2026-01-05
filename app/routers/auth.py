@@ -6,6 +6,7 @@ and user authentication.
 """
 
 from datetime import timedelta
+from typing import Annotated  # Add this import
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials, OAuth2PasswordRequestForm
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -34,8 +35,8 @@ limiter = Limiter(key_func=get_remote_address)
 @limiter.limit("5/minute")  # Strict limit to prevent brute force attacks
 async def login(
     request: Request,
-    form_data: OAuth2PasswordRequestForm = Depends(),
-    db: AsyncSession = Depends(get_db)
+    form_data: Annotated[OAuth2PasswordRequestForm, Depends()],  # Changed this line
+    db: Annotated[AsyncSession, Depends(get_db)]  # Changed this line too
 ):
     """
     Authenticate user and return access token.
@@ -105,7 +106,6 @@ async def login(
         user=user_schema,
         expires_in=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60  # Convert to seconds
     )
-
 
 @router.post("/register", response_model=APIKeyResponse)
 @limiter.limit("3/hour")  # Limit registration attempts

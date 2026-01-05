@@ -13,7 +13,8 @@ from slowapi import Limiter
 from slowapi.util import get_remote_address
 
 from app.database import get_db
-from app.dependencies.auth import validate_api_key
+from app.dependencies.auth import get_api_key
+from app.models.api_key import APIKey
 from app.schemas.weather import (
     StationResponse,
     ObservationResponse,
@@ -43,7 +44,7 @@ async def get_weather_stations(
     limit: int = Query(100, ge=1, le=1000),
     region: Optional[str] = Query(None, description="Filter by region"),
     db: AsyncSession = Depends(get_db),
-    api_key: str = Depends(validate_api_key),
+    api_key: APIKey = Depends(get_api_key),
 ):
     """
     Get list of weather stations.
@@ -68,7 +69,7 @@ async def get_station_details(
     request: Request,
     station_code: str,
     db: AsyncSession = Depends(get_db),
-    api_key: str = Depends(validate_api_key),
+    api_key: APIKey = Depends(get_api_key),
 ):
     """
     Get detailed information about a specific weather station.
@@ -95,7 +96,7 @@ async def get_observations(
     limit: int = Query(100, ge=1, le=1000),
     skip: int = Query(0, ge=0),
     db: AsyncSession = Depends(get_db),
-    api_key: str = Depends(validate_api_key),
+    api_key: APIKey = Depends(get_api_key),
 ):
     """
     Get weather observations.
@@ -132,7 +133,7 @@ async def get_observation(
     request: Request,
     observation_id: int,
     db: AsyncSession = Depends(get_db),
-    api_key: str = Depends(validate_api_key),
+    api_key: APIKey = Depends(get_api_key),
 ):
     """
     Get a specific weather observation by ID.
@@ -154,7 +155,7 @@ async def get_latest_observation(
     request: Request,
     station_code: str,
     db: AsyncSession = Depends(get_db),
-    api_key: str = Depends(validate_api_key),
+    api_key: APIKey = Depends(get_api_key),
 ):
     """
     Get the latest observation for a specific weather station.
@@ -186,7 +187,7 @@ async def create_station(
     request: Request,
     station: StationCreate,
     db: AsyncSession = Depends(get_db),
-    api_key: str = Depends(validate_api_key),
+    api_key: APIKey = Depends(get_api_key),
 ):
     """
     Create a new weather station.
@@ -210,7 +211,7 @@ async def create_observation(
     request: Request,
     observation: ObservationCreate,
     db: AsyncSession = Depends(get_db),
-    api_key: str = Depends(validate_api_key),
+    api_key: APIKey = Depends(get_api_key),
 ):
     """
     Create a new weather observation.

@@ -58,3 +58,4 @@ class TokenResponse(Token):
     """Response schema for token generation."""
     user: User
     expires_in: int  # seconds
+
