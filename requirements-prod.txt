@@ -25,9 +25,8 @@ python-multipart==0.0.6
 python-dotenv==1.0.0
 slowapi==0.1.9
 
-# Data Processing (for import scripts)
-pandas==2.2.0
-openpyxl==3.1.2
-
 # Production server
 gunicorn==21.2.0
+
+# NOTE: pandas and openpyxl removed from production
+# They're only needed for import scripts, which can use full requirements.txt locally
