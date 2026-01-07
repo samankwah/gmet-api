@@ -1,0 +1,33 @@
+# Production Requirements - GMet Weather API
+# Excludes development/testing packages
+
+# Web Framework
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+
+# Database
+sqlalchemy[asyncio]==2.0.23
+asyncpg==0.29.0
+alembic==1.12.1
+python-dateutil==2.9.0
+
+# Pydantic & Settings
+pydantic==2.5.0
+pydantic-settings==2.1.0
+
+# Authentication & Security
+python-jose[cryptography]==3.3.0
+passlib==1.7.4
+bcrypt==4.1.2
+python-multipart==0.0.6
+
+# CORS & Middleware
+python-dotenv==1.0.0
+slowapi==0.1.9
+
+# Data Processing (for import scripts)
+pandas==2.2.0
+openpyxl==3.1.2
+
+# Production server
+gunicorn==21.2.0

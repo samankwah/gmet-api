@@ -18,7 +18,8 @@
       "Bash(del check_sunshine.py truncate_and_reimport.py)",
       "Bash(find:*)",
       "Bash(git add:*)",
-      "Bash(git commit:*)"
+      "Bash(git commit:*)",
+      "Bash(git push:*)"
     ]
   }
 }
