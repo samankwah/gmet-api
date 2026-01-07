@@ -11,6 +11,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
 from app.schemas.api_key import APIKeyCreate, APIKeyCreateResponse, APIKeyResponse
 from app.crud.api_key import api_key as api_key_crud
+from app.models.api_key import APIKey
+from app.dependencies.auth import get_current_admin_api_key
 from app.utils.logging_config import get_logger
 
 logger = get_logger(__name__)
@@ -35,12 +37,12 @@ router = APIRouter(
 async def create_api_key(
     api_key_data: APIKeyCreate,
     db: AsyncSession = Depends(get_db),
+    admin_key: APIKey = Depends(get_current_admin_api_key),
 ):
     """
     Create a new API key.
 
-    **Note:** This endpoint is currently open (no authentication required).
-    It will be secured with admin role checks in the next phase.
+    **Requires admin authentication.**
 
     The plain text API key is returned in the response and will never be shown again.
     Store it securely immediately!
@@ -107,16 +109,16 @@ async def create_api_key(
     "/",
     response_model=List[APIKeyResponse],
     summary="List all API keys",
-    description="Get a list of all API keys (masked, no sensitive data). Admin only (to be secured in next phase).",
+    description="Get a list of all API keys (masked, no sensitive data). Requires admin authentication.",
 )
 async def list_api_keys(
     db: AsyncSession = Depends(get_db),
+    admin_key: APIKey = Depends(get_current_admin_api_key),
 ):
     """
     List all API keys.
 
-    **Note:** This endpoint is currently open (no authentication required).
-    It will be secured with admin role checks in the next phase.
+    **Requires admin authentication.**
 
     Returns a list of API keys with their metadata, but no sensitive key data.
 

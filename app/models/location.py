@@ -24,14 +24,14 @@ class LocationMapping(BaseModel):
     __tablename__ = "location_mappings"
 
     location_name = Column(
-        String,
+        String(200),
         nullable=False,
         index=True,
         comment="Human-readable location name (e.g., 'Accra', 'Kumasi')"
     )
 
     location_type = Column(
-        String,
+        String(50),
         nullable=False,
         index=True,
         comment="Type of location: 'city', 'region', 'district', 'alias'"

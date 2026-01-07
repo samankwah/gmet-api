@@ -4,7 +4,7 @@ API Key CRUD operations.
 This module contains CRUD operations specific to API key management.
 """
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
@@ -110,7 +110,7 @@ class CRUDAPIKey(CRUDBase[APIKey, dict, dict]):
         for api_key in api_keys:
             if verify_api_key(plain_key, api_key.key):
                 # Update last_used_at timestamp
-                api_key.last_used_at = datetime.utcnow()
+                api_key.last_used_at = datetime.now(timezone.utc)
                 await db.commit()
                 await db.refresh(api_key)
                 return api_key

@@ -19,15 +19,17 @@ class User(BaseModel):
 
     __tablename__ = "users"
 
-    email = Column(String, unique=True, index=True, nullable=False)
-    hashed_password = Column(String, nullable=False)
+    email = Column(String(255), unique=True, index=True, nullable=False)
+    hashed_password = Column(String(255), nullable=False)
     is_active = Column(Boolean, default=True)
     is_superuser = Column(Boolean, default=False)
-
-    # API key for authentication
-    api_key = Column(String, unique=True, index=True, nullable=False)
+    role = Column(String(50), default="user")  # user, admin, partner
 
     # Relationship to weather data (if user owns data)
     # weather_data = relationship("WeatherData", back_populates="owner")
+
+
+
+
 
 

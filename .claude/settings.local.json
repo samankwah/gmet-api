@@ -6,7 +6,18 @@
       "Bash(del \"alembic\\\\versions\\\\6051c7c23259_initial_schema.py\")",
       "Bash(alembic revision:*)",
       "Bash(source:*)",
-      "Bash(pip install:*)"
+      "Bash(pip install:*)",
+      "Bash(ls:*)",
+      "Bash(dir:*)",
+      "Bash(timeout:*)",
+      "Bash(ping:*)",
+      "Bash(curl:*)",
+      "Bash(alembic upgrade:*)",
+      "Bash(tasklist:*)",
+      "Bash(taskkill /F /PID 14816)",
+      "Bash(del check_sunshine.py truncate_and_reimport.py)",
+      "Bash(find:*)",
+      "Bash(git add:*)"
     ]
   }
 }

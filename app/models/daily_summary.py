@@ -82,10 +82,15 @@ class DailySummary(BaseModel):
         nullable=True,
         comment="Mean relative humidity in % (average of 0600, 0900, 1200, 1500 observations)"
     )
-    max_wind_gust = Column(
+    wind_speed = Column(
         Float,
         nullable=True,
-        comment="Maximum wind gust in m/s during the 24-hour period"
+        comment="Mean wind speed in m/s over 24-hour period (average of available readings)"
+    )
+    sunshine_hours = Column(
+        Float,
+        nullable=True,
+        comment="Total sunshine duration in hours during the 24-hour period"
     )
 
     # Relationship to station

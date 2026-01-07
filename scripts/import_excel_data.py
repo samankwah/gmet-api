@@ -22,12 +22,12 @@ EXCEL_FILE = r"C:\Users\CRAFT\OneDrive - Smart Workplace\Documents\dataset\Excel
 
 # Element ID mapping to database fields
 ELEMENT_MAPPING = {
-    'Tx': 'temperature_max',  # Maximum temperature
-    'Tn': 'temperature_min',  # Minimum temperature
-    'Kts': 'wind_speed',      # Wind speed in knots
+    'Tx': 'temperature',       # Maximum temperature (stored as temperature)
+    'Tn': 'temperature',       # Minimum temperature (stored as temperature)
+    'Kts': 'wind_speed',       # Wind speed in knots
     'RH': 'relative_humidity', # Relative humidity
-    'P': 'pressure',          # Pressure
-    'RR': 'precipitation',    # Rainfall/Precipitation
+    'P': 'pressure',           # Pressure
+    'RR': 'rainfall',          # Rainfall (correct field name is 'rainfall', not 'precipitation')
 }
 
 
@@ -44,26 +44,26 @@ async def import_stations(df: pd.DataFrame, session: AsyncSessionClass):
     skipped = 0
     
     for _, row in stations_df.iterrows():
-        station_id = str(row['Station ID']).strip()
-        
+        station_code = str(row['Station ID']).strip()
+
         # Check if station exists
         result = await session.execute(
-            select(Station).where(Station.station_id == station_id)
+            select(Station).where(Station.code == station_code)
         )
         existing = result.scalar_one_or_none()
-        
+
         if existing:
             skipped += 1
             continue
-        
+
         # Create new station
+        # Note: Station model requires 'code', 'name', 'latitude', 'longitude', 'region'
         station = Station(
-            station_id=station_id,
+            code=station_code,
             name=str(row['Name']).strip(),
             latitude=float(row['Geogr2']),
             longitude=float(row['Geogr1']),
-            elevation=None,  # Not provided in Excel
-            is_active=True
+            region="Unknown"  # Excel doesn't provide region - set to Unknown
         )
         
         session.add(station)
@@ -97,11 +97,22 @@ async def import_observations(df: pd.DataFrame, session: AsyncSessionClass):
             print(f"  Processing row {idx}/{total_rows}...")
         
         try:
-            station_id = str(row['Station ID']).strip()
+            station_code = str(row['Station ID']).strip()
             element_id = str(row['Element ID']).strip()
             year = int(row['Year'])
             month = int(row['Month'])
-            
+
+            # Get station_id from station code
+            result_station = await session.execute(
+                select(Station.id).where(Station.code == station_code)
+            )
+            station_id = result_station.scalar_one_or_none()
+
+            if not station_id:
+                # Station not found - skip this observation
+                skipped += 1
+                continue
+
             # Parse observation time
             if isinstance(row['Time'], str):
                 obs_time = datetime.strptime(row['Time'], '%H:%M:%S').time()
@@ -144,11 +155,11 @@ async def import_observations(df: pd.DataFrame, session: AsyncSessionClass):
                 result = await session.execute(
                     select(SynopticObservation).where(
                         SynopticObservation.station_id == station_id,
-                        SynopticObservation.observation_time == obs_datetime
+                        SynopticObservation.obs_datetime == obs_datetime
                     )
                 )
                 existing = result.scalar_one_or_none()
-                
+
                 if existing:
                     # Update existing observation
                     setattr(existing, field_name, value)
@@ -156,7 +167,7 @@ async def import_observations(df: pd.DataFrame, session: AsyncSessionClass):
                     # Create new observation
                     obs_data = {
                         'station_id': station_id,
-                        'observation_time': obs_datetime,
+                        'obs_datetime': obs_datetime,
                         field_name: value
                     }
                     obs = SynopticObservation(**obs_data)

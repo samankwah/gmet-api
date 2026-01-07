@@ -113,10 +113,11 @@ This module contains all configuration settings for the application,
 loaded from environment variables with sensible defaults.
 """
 
+import os
 import secrets
 from typing import List, Optional, Union
 
-from pydantic import AnyHttpUrl, field_validator, ValidationInfo, ConfigDict
+from pydantic import AnyHttpUrl, Field, field_validator, ValidationInfo, ConfigDict
 from pydantic_settings import BaseSettings
 
 
@@ -129,8 +130,11 @@ class Settings(BaseSettings):
 
     # API Configuration
     API_V1_STR: str = "/api/v1"
-    SECRET_KEY: str = secrets.token_urlsafe(32)
-    ALGORITHM: str = "HS256"  # Add this line
+    SECRET_KEY: str = Field(
+        default_factory=lambda: os.getenv("SECRET_KEY") or secrets.token_urlsafe(32),
+        description="Secret key for JWT encoding. MUST be set via SECRET_KEY environment variable in production!"
+    )
+    ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 8  # 8 days
 
     # Server Configuration

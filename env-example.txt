@@ -1,5 +1,8 @@
 # Application Configuration
 DEBUG=True
+# CRITICAL: Generate a secure SECRET_KEY for production!
+# Run: python -c "import secrets; print(secrets.token_urlsafe(32))"
+# WARNING: Changing this will invalidate all existing JWT tokens
 SECRET_KEY=your-secret-key-here
 ACCESS_TOKEN_EXPIRE_MINUTES=60
 
@@ -32,5 +35,9 @@ RATE_LIMIT_WINDOW=60
 
 # Logging
 LOG_LEVEL=INFO
+
+
+
+
 
 

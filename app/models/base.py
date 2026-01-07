@@ -5,7 +5,7 @@ This module contains the base SQLAlchemy model with common fields
 like id, created_at, updated_at that other models can inherit from.
 """
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any
 
 from sqlalchemy import Column, DateTime, Integer
@@ -29,13 +29,24 @@ class BaseModel(Base):
 
     @declared_attr
     def created_at(cls):
-        """Timestamp when record was created."""
-        return Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+        """Timestamp when record was created (UTC)."""
+        return Column(
+            DateTime(timezone=True),
+            default=lambda: datetime.now(timezone.utc),
+            server_default=func.now(),
+            nullable=False
+        )
 
     @declared_attr
     def updated_at(cls):
-        """Timestamp when record was last updated."""
-        return Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+        """Timestamp when record was last updated (UTC)."""
+        return Column(
+            DateTime(timezone=True),
+            default=lambda: datetime.now(timezone.utc),
+            onupdate=lambda: datetime.now(timezone.utc),
+            server_default=func.now(),
+            nullable=False
+        )
 
     def __repr__(self) -> str:
         """String representation of the model instance."""
@@ -44,5 +55,9 @@ class BaseModel(Base):
     def dict(self) -> dict[str, Any]:
         """Convert model instance to dictionary."""
         return {c.name: getattr(self, c.name) for c in self.__table__.columns}
+
+
+
+
 
 

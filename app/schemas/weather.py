@@ -5,6 +5,7 @@ This module contains Pydantic schemas for weather data requests and responses.
 """
 
 from datetime import datetime, timezone
+from datetime import date as DateType
 from typing import List, Optional
 from pydantic import BaseModel, Field, field_validator, model_validator
 
@@ -45,14 +46,14 @@ class ObservationBase(BaseSchema):
     All weather parameters are validated against realistic ranges for Ghana's climate.
     """
     station_id: int
-    timestamp: datetime
+    obs_datetime: datetime
 
     # Weather measurements with realistic ranges for Ghana
     temperature: Optional[float] = Field(
         None,
         description="Temperature in Celsius (realistic range: 15-45°C)"
     )
-    humidity: Optional[float] = Field(
+    relative_humidity: Optional[int] = Field(
         None,
         ge=0,
         le=100,
@@ -153,23 +154,23 @@ class ObservationBase(BaseSchema):
                 )
         return v
 
-    @field_validator('timestamp')
+    @field_validator('obs_datetime')
     @classmethod
-    def validate_timestamp(cls, v):
+    def validate_obs_datetime(cls, v):
         """
-        Validate timestamp is not in the future.
+        Validate obs_datetime is not in the future.
 
         Weather observations should be for current or past times only.
         """
         if v is not None:
             now = datetime.now(timezone.utc)
-            # Make timestamp timezone-aware if it isn't
+            # Make obs_datetime timezone-aware if it isn't
             if v.tzinfo is None:
                 v = v.replace(tzinfo=timezone.utc)
 
             if v > now:
                 raise ValueError(
-                    f'Timestamp {v} is in the future. '
+                    f'Observation datetime {v} is in the future. '
                     'Observations must be for current or past times.'
                 )
         return v
@@ -183,7 +184,7 @@ class ObservationBase(BaseSchema):
         """
         weather_params = [
             self.temperature,
-            self.humidity,
+            self.relative_humidity,
             self.wind_speed,
             self.rainfall,
             self.pressure
@@ -192,7 +193,7 @@ class ObservationBase(BaseSchema):
         if all(param is None for param in weather_params):
             raise ValueError(
                 'Observation must include at least one weather parameter '
-                '(temperature, humidity, wind_speed, rainfall, or pressure).'
+                '(temperature, relative_humidity, wind_speed, rainfall, or pressure).'
             )
 
         return self
@@ -206,9 +207,9 @@ class ObservationCreate(ObservationBase):
 class ObservationUpdate(BaseSchema):
     """Schema for updating weather observation."""
     temperature: Optional[float] = None
-    humidity: Optional[float] = Field(None, ge=0, le=100)
+    relative_humidity: Optional[int] = Field(None, ge=0, le=100)
     wind_speed: Optional[float] = Field(None, ge=0)
-    wind_direction: Optional[float] = Field(None, ge=0, le=360)
+    wind_direction: Optional[int] = Field(None, ge=0, le=360)
     rainfall: Optional[float] = Field(None, ge=0)
     pressure: Optional[float] = None
 
@@ -229,3 +230,65 @@ class WeatherQueryParams(BaseModel):
     end_date: Optional[datetime] = None
     limit: int = Field(100, ge=1, le=10000)
     offset: int = Field(0, ge=0)
+
+
+# Daily Summary Schemas (for daily aggregates with min/max temps)
+
+class DailySummaryBase(BaseSchema):
+    """
+    Base daily weather summary schema with separate min/max temperatures.
+
+    Daily summaries aggregate weather data over 24-hour periods,
+    providing min/max temperatures, mean humidity, and totals.
+    """
+    station_id: int
+    date: DateType = Field(..., description="Observation date")
+
+    # Temperature statistics
+    temp_max: Optional[float] = Field(
+        None,
+        description="Maximum temperature in °C over 24-hour period"
+    )
+    temp_max_time: Optional[datetime] = Field(
+        None,
+        description="Time when maximum temperature was recorded"
+    )
+    temp_min: Optional[float] = Field(
+        None,
+        description="Minimum temperature in °C over 24-hour period"
+    )
+    temp_min_time: Optional[datetime] = Field(
+        None,
+        description="Time when minimum temperature was recorded"
+    )
+
+    # Precipitation
+    rainfall_total: Optional[float] = Field(
+        None,
+        ge=0,
+        description="Total 24-hour rainfall in mm"
+    )
+
+    # Other statistics
+    mean_rh: Optional[int] = Field(
+        None,
+        ge=0,
+        le=100,
+        description="Mean relative humidity in % (average of 0600, 0900, 1200, 1500 observations)"
+    )
+    wind_speed: Optional[float] = Field(
+        None,
+        ge=0,
+        description="Mean wind speed in m/s over 24-hour period (average of available readings)"
+    )
+    sunshine_hours: Optional[float] = Field(
+        None,
+        ge=0,
+        le=24,
+        description="Total sunshine duration in hours during the 24-hour period"
+    )
+
+
+class DailySummaryResponse(DailySummaryBase, IDSchema, TimestampSchema):
+    """Complete daily summary response schema."""
+    pass

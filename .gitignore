@@ -160,4 +160,12 @@ alembic/versions/*.pyc
 *.tmp
 *.temp
 
+# Windows reserved names
+nul
+NUL
+
+
+
+
+
 

@@ -160,3 +160,7 @@ class CRUDBase(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
         return result.scalars().first() is not None
 
 
+
+
+
+

@@ -44,7 +44,6 @@ async def get_weather_stations(
     limit: int = Query(100, ge=1, le=1000),
     region: Optional[str] = Query(None, description="Filter by region"),
     db: AsyncSession = Depends(get_db),
-    api_key: APIKey = Depends(get_api_key),
 ):
     """
     Get list of weather stations.
@@ -52,6 +51,8 @@ async def get_weather_stations(
     Supports filtering by region and pagination.
 
     Rate limit: 100 requests per minute
+
+    **Note:** This endpoint is publicly accessible (no authentication required).
     """
     if region:
         stations = await station_crud.get_by_region(
@@ -69,12 +70,13 @@ async def get_station_details(
     request: Request,
     station_code: str,
     db: AsyncSession = Depends(get_db),
-    api_key: APIKey = Depends(get_api_key),
 ):
     """
     Get detailed information about a specific weather station.
 
     Rate limit: 100 requests per minute
+
+    **Note:** This endpoint is publicly accessible (no authentication required).
     """
     station = await station_crud.get_by_code(db, code=station_code)
     if not station:

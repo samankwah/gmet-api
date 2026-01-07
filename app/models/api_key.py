@@ -21,7 +21,7 @@ class APIKey(BaseModel):
     __tablename__ = "api_keys"
 
     key = Column(String(64), unique=True, index=True, nullable=False, comment="Hashed API key (bcrypt hash)")
-    name = Column(String(255), nullable=False, comment="Descriptive name for the key (e.g., 'Internal Dashboard')")
+    name = Column(String(200), nullable=False, comment="Descriptive name for the key (e.g., 'Internal Dashboard')")
     role = Column(String(50), nullable=False, default="read_only", comment="Role: 'admin', 'read_only', or 'partner'")
     is_active = Column(Boolean, default=True, nullable=False, comment="Whether the key is active")
     last_used_at = Column(DateTime(timezone=True), nullable=True, comment="Timestamp of last use")

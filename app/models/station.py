@@ -22,11 +22,11 @@ class Station(BaseModel):
 
     __tablename__ = "stations"
 
-    name = Column(String, nullable=False, index=True, comment="Station name")
-    code = Column(String, unique=True, index=True, nullable=False, comment="Unique station code (e.g., DGAA)")
+    name = Column(String(200), nullable=False, index=True, comment="Station name")
+    code = Column(String(50), unique=True, index=True, nullable=False, comment="Unique station code (e.g., DGAA)")
     latitude = Column(Float, nullable=False, comment="Latitude in degrees")
     longitude = Column(Float, nullable=False, comment="Longitude in degrees")
-    region = Column(String, nullable=False, index=True, comment="Region or administrative area")
+    region = Column(String(100), nullable=False, index=True, comment="Region or administrative area")
 
     # Relationships
     synoptic_observations = relationship(

@@ -1,0 +1,28 @@
+================================================================================
+HYBRID WEATHER DATA STORAGE MIGRATION REPORT
+================================================================================
+
+Migration Date: 2026-01-07 20:20:55
+
+BACKUPS CREATED:
+  Synoptic observations: backups\synoptic_observations_backup_20260107_202039.csv
+  Daily summaries: backups\daily_summaries_backup_20260107_202040.csv
+
+DATA IMPORTED:
+  Synoptic observations: 38,322
+  Daily summaries: 10,245
+  Stations with synoptic data: 23
+  Stations with daily summaries: 23
+
+DATE RANGES:
+  Synoptic: 2024-01-01T06:00:00+00:00 to 2025-05-31T09:00:00+00:00
+  Daily: 2024-01-01 to 2025-05-31
+
+DATA VALIDATION:
+  Invalid temp ranges (max < min): 1
+  NULL observation times: 0
+  Invalid mean_rh values: 0
+
+MIGRATION STATUS: [WARNING] 1 data integrity issues detected
+
+================================================================================

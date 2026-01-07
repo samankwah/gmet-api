@@ -6,7 +6,7 @@ These endpoints provide a more user-friendly interface aligned with the official
 """
 
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, time, timezone
 from typing import List, Optional
 from fastapi import APIRouter, Depends, Query, HTTPException, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -17,7 +17,7 @@ from app.database import get_db
 from app.dependencies.auth import get_api_key
 from app.models.api_key import APIKey
 from app.schemas.weather import ObservationResponse
-from app.crud.weather import station as station_crud, observation as observation_crud
+from app.crud.weather import station as station_crud, observation as observation_crud, daily_summary as daily_summary_crud
 from app.utils.logging_config import get_logger
 
 logger = get_logger(__name__)
@@ -105,22 +105,24 @@ async def get_current_weather(
     # Try to find station by code first (exact match)
     station = await station_crud.get_by_code(db, code=location.upper())
 
-    # If not found by code, try to find by name (case-insensitive)
+    # If not found by code, try to find by name (case-insensitive, database query)
     if not station:
-        # Get all stations and search by name
-        all_stations = await station_crud.get_multi(db, skip=0, limit=1000)
-        for s in all_stations:
-            if s.name.lower() == location.lower():
-                station = s
-                break
+        from sqlalchemy import or_, func
+        from app.models.station import Station
 
-        # If still not found, try partial match on name
-        if not station:
-            for s in all_stations:
-                if location.lower() in s.name.lower():
-                    station = s
-                    logger.info(f"Partial match found: {s.name} for query '{location}'")
-                    break
+        # Use database query instead of loading all stations
+        result = await db.execute(
+            select(Station).where(
+                or_(
+                    func.lower(Station.name) == location.lower(),
+                    func.lower(Station.name).like(f"%{location.lower()}%")
+                )
+            ).limit(1)
+        )
+        station = result.scalar_one_or_none()
+
+        if station:
+            logger.info(f"Station found by name search: {station.name} for query '{location}'")
 
     if not station:
         logger.warning(f"Location not found: {location}")
@@ -129,7 +131,40 @@ async def get_current_weather(
             detail=f"Location '{location}' not found. Please use a valid city name or station code."
         )
 
-    # Get the latest observation for this station
+    # Try to get daily summary first (preferred for current day data)
+    daily = await daily_summary_crud.get_latest_for_station(db, station_id=station.id)
+
+    # Check if daily summary is recent (within last 24 hours)
+    if daily and (datetime.now(timezone.utc).date() - daily.date).days <= 1:
+        logger.info(f"Current weather from daily summary for {station.name}: min={daily.temp_min}°C, max={daily.temp_max}°C")
+
+        # Return as observation format with temp_min and temp_max fields
+        # Calculate average for backward compatibility
+        avg_temp = None
+        if daily.temp_min is not None and daily.temp_max is not None:
+            avg_temp = (daily.temp_min + daily.temp_max) / 2
+        elif daily.temp_min is not None:
+            avg_temp = daily.temp_min
+        elif daily.temp_max is not None:
+            avg_temp = daily.temp_max
+
+        return {
+            "id": daily.id,
+            "station_id": daily.station_id,
+            "obs_datetime": datetime.combine(daily.date, time(12, 0), tzinfo=timezone.utc),
+            "temperature": avg_temp,  # For backward compatibility
+            "temp_min": daily.temp_min,  # NEW: Separate min temp
+            "temp_max": daily.temp_max,  # NEW: Separate max temp
+            "relative_humidity": daily.mean_rh,
+            "wind_speed": daily.wind_speed,
+            "wind_direction": None,
+            "rainfall": daily.rainfall_total,
+            "pressure": None,
+            "created_at": daily.created_at,
+            "updated_at": daily.updated_at
+        }
+
+    # Fall back to latest synoptic observation
     observation = await observation_crud.get_latest_for_station(db, station_id=station.id)
 
     if not observation:
@@ -139,7 +174,7 @@ async def get_current_weather(
             detail=f"No weather observations available for '{location}'. Station: {station.name}"
         )
 
-    logger.info(f"Current weather retrieved for {station.name}: {observation.temperature}°C")
+    logger.info(f"Current weather from synoptic observation for {station.name}: {observation.temperature}°C")
     return observation
 
 
@@ -161,6 +196,11 @@ async def get_historical_weather(
         ...,
         description="End date in YYYY-MM-DD format",
         examples=["2025-12-31"]
+    ),
+    granularity: str = Query(
+        "daily",
+        description="Data granularity: 'daily' (default) returns daily summaries with min/max temps, 'synoptic' returns time-specific observations",
+        examples=["daily", "synoptic"]
     ),
     param: Optional[str] = Query(
         None,
@@ -264,31 +304,191 @@ async def get_historical_weather(
                 detail=f"Station '{station}' not found."
             )
 
-    # Get observations
-    if station_obj:
-        observations = await observation_crud.get_observations_in_date_range(
+    # Get data based on granularity
+    if granularity == "daily":
+        # Return daily summaries (default)
+        if not station_obj:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Station parameter is required for daily granularity"
+            )
+
+        summaries = await daily_summary_crud.get_summaries_in_date_range(
             db,
             station_id=station_obj.id,
-            start_date=start_date,
-            end_date=end_date,
+            start_date=start_date.date(),
+            end_date=end_date.date(),
             skip=skip,
             limit=limit
         )
-        logger.info(f"Retrieved {len(observations)} observations for {station_obj.name}")
+        logger.info(f"Retrieved {len(summaries)} daily summaries for {station_obj.name}")
+
+        # Convert to observation response format with temp_min, temp_max
+        result = []
+        for s in summaries:
+            # Calculate average temperature for backward compatibility
+            avg_temp = None
+            if s.temp_min is not None and s.temp_max is not None:
+                avg_temp = (s.temp_min + s.temp_max) / 2
+            elif s.temp_min is not None:
+                avg_temp = s.temp_min
+            elif s.temp_max is not None:
+                avg_temp = s.temp_max
+
+            result.append({
+                "id": s.id,
+                "station_id": s.station_id,
+                "obs_datetime": datetime.combine(s.date, time(12, 0), tzinfo=timezone.utc),
+                "temperature": avg_temp,  # For backward compatibility
+                "temp_min": s.temp_min,  # NEW: Separate min temp
+                "temp_max": s.temp_max,  # NEW: Separate max temp
+                "relative_humidity": s.mean_rh,
+                "wind_speed": s.wind_speed,
+                "wind_direction": None,
+                "rainfall": s.rainfall_total,
+                "pressure": None,
+                "created_at": s.created_at,
+                "updated_at": s.updated_at
+            })
+
+        if param:
+            logger.info(f"Note: Parameter filter '{param}' is informational. All parameters returned.")
+
+        return result
+
     else:
-        # Get all observations in date range (across all stations)
-        observations = await observation_crud.get_multi(db, skip=skip, limit=limit)
-        # Filter by date range
-        observations = [
-            obs for obs in observations
-            if start_date <= obs.timestamp <= end_date
-        ]
-        logger.info(f"Retrieved {len(observations)} observations for all stations")
+        # Return synoptic observations (time-specific)
+        if station_obj:
+            observations = await observation_crud.get_observations_in_date_range(
+                db,
+                station_id=station_obj.id,
+                start_date=start_date,
+                end_date=end_date,
+                skip=skip,
+                limit=limit
+            )
+            logger.info(f"Retrieved {len(observations)} synoptic observations for {station_obj.name}")
+        else:
+            # Get all observations in date range (across all stations)
+            observations = await observation_crud.get_multi(db, skip=skip, limit=limit)
+            # Filter by date range
+            observations = [
+                obs for obs in observations
+                if start_date <= obs.obs_datetime.replace(tzinfo=None) <= end_date
+            ]
+            logger.info(f"Retrieved {len(observations)} synoptic observations for all stations")
 
-    if param:
-        logger.info(f"Note: Parameter filter '{param}' is informational. All parameters returned.")
+        if param:
+            logger.info(f"Note: Parameter filter '{param}' is informational. All parameters returned.")
 
-    return observations
+        return observations
+
+
+@router.get("/daily-summaries/{station_code}")
+@limiter.limit("100/minute")
+async def get_daily_summaries(
+    request: Request,
+    station_code: str,
+    start: str = Query(..., description="Start date YYYY-MM-DD", examples=["2024-01-01"]),
+    end: str = Query(..., description="End date YYYY-MM-DD", examples=["2024-12-31"]),
+    limit: int = Query(100, ge=1, le=1000, description="Maximum records to return"),
+    skip: int = Query(0, ge=0, description="Number of records to skip"),
+    db: AsyncSession = Depends(get_db),
+    api_key: APIKey = Depends(get_api_key),
+):
+    """
+    Get daily weather summaries with separate min/max temperatures.
+
+    This endpoint provides daily aggregated weather data including:
+    - Separate minimum and maximum temperatures
+    - Mean relative humidity
+    - Total 24-hour rainfall
+    - Maximum wind gust
+
+    **Example:**
+    ```
+    GET /v1/daily-summaries/23024TEM?start=2024-01-01&end=2024-12-31
+    ```
+
+    **Response includes temp_min and temp_max fields:**
+    ```json
+    [
+        {
+            "id": 1,
+            "station_id": 1,
+            "date": "2024-01-01",
+            "temp_max": 32.8,
+            "temp_min": 26.5,
+            "rainfall_total": 0.0,
+            "mean_rh": 72
+        }
+    ]
+    ```
+
+    Args:
+        request: FastAPI request object
+        station_code: Station code (e.g., '23024TEM', '23016ACC')
+        start: Start date in YYYY-MM-DD format
+        end: End date in YYYY-MM-DD format
+        limit: Maximum records to return
+        skip: Number of records to skip
+        db: Database session
+        api_key: Valid API key
+
+    Returns:
+        List of daily summary records
+
+    Raises:
+        HTTPException: 400 if dates invalid, 404 if station not found
+    """
+    logger.info(f"Daily summaries request: station={station_code}, start={start}, end={end}")
+
+    # Find station
+    station = await station_crud.get_by_code(db, code=station_code.upper())
+    if not station:
+        # Try partial match
+        all_stations = await station_crud.get_multi(db, skip=0, limit=1000)
+        for s in all_stations:
+            if station_code.lower() in s.name.lower() or station_code.lower() in s.code.lower():
+                station = s
+                break
+
+        if not station:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Station '{station_code}' not found"
+            )
+
+    # Parse dates
+    try:
+        start_date = datetime.strptime(start, "%Y-%m-%d").date()
+        end_date = datetime.strptime(end, "%Y-%m-%d").date()
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid date format. Please use YYYY-MM-DD format."
+        )
+
+    # Validate date range
+    if start_date > end_date:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Start date must be before or equal to end date."
+        )
+
+    # Get daily summaries
+    summaries = await daily_summary_crud.get_summaries_in_date_range(
+        db,
+        station_id=station.id,
+        start_date=start_date,
+        end_date=end_date,
+        skip=skip,
+        limit=limit
+    )
+
+    logger.info(f"Retrieved {len(summaries)} daily summaries for {station.name}")
+
+    return summaries
 
 
 @router.get("/forecast/daily")
