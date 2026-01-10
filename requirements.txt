@@ -5,6 +5,7 @@ uvicorn[standard]==0.34.0  # Upgraded for better stability
 # Database
 sqlalchemy[asyncio]==2.0.23
 asyncpg==0.30.0  # Upgraded for Python 3.13 compatibility (has pre-built wheels)
+psycopg2-binary==2.9.9  # Required for sync PostgreSQL migrations with Alembic
 aiosqlite==0.19.0  # For SQLite support in development
 alembic==1.12.1
 python-dateutil==2.9.0  # Required for alembic timezone support
