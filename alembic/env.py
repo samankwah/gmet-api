@@ -100,7 +100,24 @@ def run_migrations_online() -> None:
 
     # Prefer environment variable DATABASE_URL (Railway/Render) or settings
     # Fall back to alembic.ini only for local SQLite development
-    url = os.getenv('DATABASE_URL') or settings.SQLALCHEMY_DATABASE_URI
+    url = os.getenv('DATABASE_URL')
+
+    if not url:
+        # Use settings.SQLALCHEMY_DATABASE_URI constructed from individual env vars
+        try:
+            url = settings.SQLALCHEMY_DATABASE_URI
+        except Exception as e:
+            raise RuntimeError(
+                f"Failed to construct database URL: {e}\n"
+                "Ensure POSTGRES_SERVER, POSTGRES_USER, POSTGRES_PASSWORD, and POSTGRES_DB are set"
+            )
+
+    # Validate URL was successfully obtained
+    if not url or url == "None":
+        raise RuntimeError(
+            "No database URL configured. "
+            "Set DATABASE_URL or individual Postgres environment variables"
+        )
 
     # Convert async drivers to sync drivers for migrations
     if url.startswith('postgresql+asyncpg://'):
