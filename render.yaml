@@ -7,7 +7,7 @@ services:
     region: oregon  # or frankfurt for EU
     plan: free
     branch: main
-    buildCommand: "python --version && pip install --upgrade pip==25.3 setuptools==80.9.0 wheel==0.45.1 && pip install -r requirements-prod.txt"
+    buildCommand: "pip install --upgrade pip==25.3 setuptools==80.9.0 wheel==0.45.1 && pip install -r requirements-prod.txt"
     startCommand: "bash start.sh"
     healthCheckPath: /docs
     envVars:

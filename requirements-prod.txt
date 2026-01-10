@@ -7,7 +7,7 @@ uvicorn[standard]==0.34.0  # Upgraded for better stability
 
 # Database
 sqlalchemy[asyncio]==2.0.23
-asyncpg==0.29.0
+asyncpg==0.30.0  # Upgraded for Python 3.13 compatibility (has pre-built wheels)
 alembic==1.12.1
 python-dateutil==2.9.0
 
