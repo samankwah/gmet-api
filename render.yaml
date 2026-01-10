@@ -38,7 +38,7 @@ services:
       - key: SECRET_KEY
         generateValue: true  # Render will auto-generate this
       - key: BACKEND_CORS_ORIGINS
-        value: "*"  # Update with your frontend URLs
+        value: "http://localhost,https://gmet-weather-api.onrender.com"  # Comma-separated, update with your frontend URLs
 
 # PostgreSQL Database
 databases:

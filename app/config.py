@@ -143,23 +143,30 @@ class Settings(BaseSettings):
     DEBUG: bool = True
 
     # CORS Configuration
-    BACKEND_CORS_ORIGINS: List[AnyHttpUrl] = [
-        "http://localhost:3000",  # React default
-        "http://localhost:8080",  # Vue default
-        "http://localhost:5173",  # Vite default
-    ]
+    # Note: Using Union[str, List] to avoid pydantic-settings 2.6+ JSON parsing issues
+    BACKEND_CORS_ORIGINS: Union[str, List[str]] = "http://localhost:3000,http://localhost:8080,http://localhost:5173"
 
     @field_validator("BACKEND_CORS_ORIGINS", mode="before")
     @classmethod
     def assemble_cors_origins(
         cls, v: Union[str, List[str]]
-    ) -> Union[List[str], str]:
-        """Parse CORS origins from environment variable."""
-        if isinstance(v, str) and not v.startswith("["):
-            return [i.strip() for i in v.split(",")]
-        elif isinstance(v, (list, str)):
+    ) -> List[str]:
+        """
+        Parse CORS origins from environment variable.
+
+        Supports:
+        - Comma-separated string: "http://localhost,http://example.com"
+        - Already parsed list: ["http://localhost"]
+        - Empty string: returns empty list
+        """
+        if v is None or v == "":
+            return []
+        if isinstance(v, str):
+            # Comma-separated values
+            return [i.strip() for i in v.split(",") if i.strip()]
+        elif isinstance(v, list):
             return v
-        raise ValueError(v)
+        raise ValueError(f"Invalid CORS origins format: {v}")
 
     # Database Configuration
     POSTGRES_SERVER: str = "localhost"
