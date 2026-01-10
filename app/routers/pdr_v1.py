@@ -8,8 +8,9 @@ These endpoints provide a more user-friendly interface aligned with the official
 import logging
 from datetime import datetime, timedelta, time, timezone
 from typing import List, Optional
-from fastapi import APIRouter, Depends, Query, HTTPException, Request, status
+from fastapi import APIRouter, Depends, Query, HTTPException, Request, status, Security
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.future import select
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 
@@ -24,7 +25,7 @@ logger = get_logger(__name__)
 
 router = APIRouter(
     prefix="/v1",
-    tags=["PDR v1 - Weather Data"],
+    tags=["Public Weather API (v1)"],
     responses={
         401: {"description": "Unauthorized"},
         404: {"description": "Not found"}
@@ -44,7 +45,7 @@ async def get_current_weather(
         examples=["Accra", "Kumasi", "DGAA"]
     ),
     db: AsyncSession = Depends(get_db),
-    api_key: APIKey = Depends(get_api_key),
+    api_key: APIKey = Security(get_api_key),
 ):
     """
     Get current weather observations for a location.
@@ -153,9 +154,16 @@ async def get_current_weather(
             "station_id": daily.station_id,
             "obs_datetime": datetime.combine(daily.date, time(12, 0), tzinfo=timezone.utc),
             "temperature": avg_temp,  # For backward compatibility
-            "temp_min": daily.temp_min,  # NEW: Separate min temp
-            "temp_max": daily.temp_max,  # NEW: Separate max temp
-            "relative_humidity": daily.mean_rh,
+            "temp_min": daily.temp_min,  # Separate min temp
+            "temp_max": daily.temp_max,  # Separate max temp
+
+            # Individual RH readings at SYNOP times
+            "rh_0600": daily.rh_0600,
+            "rh_0900": daily.rh_0900,
+            "rh_1200": daily.rh_1200,
+            "rh_1500": daily.rh_1500,
+
+            "relative_humidity": daily.mean_rh,  # Mean RH for backward compatibility
             "wind_speed": daily.wind_speed,
             "wind_direction": None,
             "rainfall": daily.rainfall_total,
@@ -210,7 +218,7 @@ async def get_historical_weather(
     limit: int = Query(1000, ge=1, le=10000, description="Maximum number of records to return"),
     skip: int = Query(0, ge=0, description="Number of records to skip"),
     db: AsyncSession = Depends(get_db),
-    api_key: APIKey = Depends(get_api_key),
+    api_key: APIKey = Security(get_api_key),
 ):
     """
     Get historical weather data for a specified time period.
@@ -394,7 +402,7 @@ async def get_daily_summaries(
     limit: int = Query(100, ge=1, le=1000, description="Maximum records to return"),
     skip: int = Query(0, ge=0, description="Number of records to skip"),
     db: AsyncSession = Depends(get_db),
-    api_key: APIKey = Depends(get_api_key),
+    api_key: APIKey = Security(get_api_key),
 ):
     """
     Get daily weather summaries with separate min/max temperatures.
@@ -491,6 +499,11 @@ async def get_daily_summaries(
     return summaries
 
 
+# TODO [Phase 2 - Forecast Integration]:
+# - Integrate with GMet forecast models or external forecast API
+# - Implement forecast data storage and caching strategy
+# - Add forecast validation and quality control
+# - Consider integration with Clidata/Climsoft for historical forecast verification
 @router.get("/forecast/daily")
 @limiter.limit("100/minute")
 async def get_daily_forecast(
@@ -506,7 +519,7 @@ async def get_daily_forecast(
         le=10,
         description="Number of forecast days (1-10)"
     ),
-    api_key: APIKey = Depends(get_api_key),
+    api_key: APIKey = Security(get_api_key),
 ):
     """
     Get daily weather forecast (Placeholder - Phase 2).
