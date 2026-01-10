@@ -2,8 +2,8 @@
 # Excludes development/testing packages
 
 # Web Framework
-fastapi==0.104.1
-uvicorn[standard]==0.24.0
+fastapi==0.115.6  # Upgraded for Pydantic 2.10 compatibility
+uvicorn[standard]==0.34.0  # Upgraded for better stability
 
 # Database
 sqlalchemy[asyncio]==2.0.23
@@ -12,8 +12,8 @@ alembic==1.12.1
 python-dateutil==2.9.0
 
 # Pydantic & Settings
-pydantic==2.5.0
-pydantic-settings==2.1.0
+pydantic==2.10.3  # Upgraded for better wheel support (Python 3.11-3.13)
+pydantic-settings==2.6.1
 
 # Authentication & Security
 python-jose[cryptography]==3.3.0

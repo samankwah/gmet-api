@@ -3,11 +3,11 @@ services:
   - type: web
     name: gmet-weather-api
     env: python
-    runtime: python-3.11.9
+    runtime: python-3.11.9  # Force Python 3.11.9 for stability
     region: oregon  # or frankfurt for EU
     plan: free
     branch: main
-    buildCommand: "pip install --upgrade pip setuptools wheel && pip install -r requirements-prod.txt"
+    buildCommand: "python --version && pip install --upgrade pip==25.3 setuptools==80.9.0 wheel==0.45.1 && pip install -r requirements-prod.txt"
     startCommand: "bash start.sh"
     healthCheckPath: /docs
     envVars:
