@@ -3,7 +3,7 @@ services:
   - type: web
     name: gmet-weather-api
     env: python
-    runtime: python-3.11.9  # Force Python 3.11.9 for stability
+    # Python version controlled by runtime.txt and .python-version files
     region: oregon  # or frankfurt for EU
     plan: free
     branch: main
