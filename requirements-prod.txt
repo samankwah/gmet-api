@@ -14,6 +14,7 @@ python-dateutil==2.9.0
 # Pydantic & Settings
 pydantic==2.10.3  # Upgraded for better wheel support (Python 3.11-3.13)
 pydantic-settings==2.6.1
+email-validator==2.3.0  # Required for pydantic EmailStr validation
 
 # Authentication & Security
 python-jose[cryptography]==3.3.0

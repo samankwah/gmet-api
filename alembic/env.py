@@ -96,21 +96,36 @@ def do_run_migrations(connection):
 
 
 def run_migrations_online() -> None:
-    """Run migrations in 'online' mode using sync engine for SQLite."""
-    
-    # For SQLite, use sync engine to avoid greenlet dependency issues
-    url = config.get_main_option("sqlalchemy.url")
-    
-    # Use sync engine for migrations (works better with SQLite)
+    """Run migrations in 'online' mode."""
+
+    # Prefer environment variable DATABASE_URL (Railway/Render) or settings
+    # Fall back to alembic.ini only for local SQLite development
+    url = os.getenv('DATABASE_URL') or settings.SQLALCHEMY_DATABASE_URI
+
+    # Convert async drivers to sync drivers for migrations
+    if url.startswith('postgresql+asyncpg://'):
+        # Async driver → sync driver for migrations
+        url = url.replace('postgresql+asyncpg://', 'postgresql://')
+    elif url.startswith('postgres://'):
+        # Railway format → standard PostgreSQL format
+        url = url.replace('postgres://', 'postgresql://')
+    elif url.startswith('sqlite+aiosqlite://'):
+        # Async SQLite → sync SQLite for migrations
+        url = url.replace('sqlite+aiosqlite://', 'sqlite://')
+
+    # Override alembic.ini URL with environment-based URL
+    config.set_main_option("sqlalchemy.url", url)
+
+    # Use sync engine for migrations
     connectable = engine_from_config(
         config.get_section(config.config_ini_section),
         prefix="sqlalchemy.",
         poolclass=pool.NullPool,
     )
-    
+
     with connectable.connect() as connection:
         do_run_migrations(connection)
-    
+
     connectable.dispose()
 
 

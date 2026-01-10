@@ -36,24 +36,28 @@ def upgrade() -> None:
     op.create_index(op.f('ix_users_email'), 'users', ['email'], unique=True)
     op.create_index(op.f('ix_users_id'), 'users', ['id'], unique=False)
 
-    # Create stations table
-    op.create_table(
-        'stations',
-        sa.Column('id', sa.Integer(), autoincrement=True, nullable=False),
-        sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('CURRENT_TIMESTAMP'), nullable=False),
-        sa.Column('updated_at', sa.DateTime(timezone=True), server_default=sa.text('CURRENT_TIMESTAMP'), nullable=False),
-        sa.Column('name', sa.String(), nullable=False),
-        sa.Column('code', sa.String(), nullable=False),
-        sa.Column('latitude', sa.Float(), nullable=False),
-        sa.Column('longitude', sa.Float(), nullable=False),
-        sa.Column('region', sa.String(), nullable=False),
-        sa.PrimaryKeyConstraint('id')
-    )
-    op.create_index(op.f('ix_stations_code'), 'stations', ['code'], unique=True)
-    op.create_index(op.f('ix_stations_id'), 'stations', ['id'], unique=False)
-    op.create_index(op.f('ix_stations_name'), 'stations', ['name'], unique=False)
-    op.create_index(op.f('ix_stations_region'), 'stations', ['region'], unique=False)
-    op.create_index('idx_station_region_code', 'stations', ['region', 'code'], unique=False)
+    # Create stations table (with idempotent guard)
+    conn = op.get_bind()
+    inspector = sa.inspect(conn)
+
+    if 'stations' not in inspector.get_table_names():
+        op.create_table(
+            'stations',
+            sa.Column('id', sa.Integer(), autoincrement=True, nullable=False),
+            sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('CURRENT_TIMESTAMP'), nullable=False),
+            sa.Column('updated_at', sa.DateTime(timezone=True), server_default=sa.text('CURRENT_TIMESTAMP'), nullable=False),
+            sa.Column('name', sa.String(), nullable=False),
+            sa.Column('code', sa.String(), nullable=False),
+            sa.Column('latitude', sa.Float(), nullable=False),
+            sa.Column('longitude', sa.Float(), nullable=False),
+            sa.Column('region', sa.String(), nullable=False),
+            sa.PrimaryKeyConstraint('id')
+        )
+        op.create_index(op.f('ix_stations_code'), 'stations', ['code'], unique=True)
+        op.create_index(op.f('ix_stations_id'), 'stations', ['id'], unique=False)
+        op.create_index(op.f('ix_stations_name'), 'stations', ['name'], unique=False)
+        op.create_index(op.f('ix_stations_region'), 'stations', ['region'], unique=False)
+        op.create_index('idx_station_region_code', 'stations', ['region', 'code'], unique=False)
 
     # Create observations table
     op.create_table(

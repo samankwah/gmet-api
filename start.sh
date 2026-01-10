@@ -6,7 +6,15 @@ echo "Starting GMet Weather API..."
 
 # Run database migrations
 echo "Running database migrations..."
+echo "Database URL: ${DATABASE_URL:-$SQLALCHEMY_DATABASE_URI}"
 alembic upgrade head
+
+if [ $? -ne 0 ]; then
+    echo "ERROR: Database migration failed. Aborting startup."
+    exit 1
+fi
+
+echo "Database migrations completed successfully."
 
 # Start the application with Gunicorn
 echo "Starting Gunicorn server..."
