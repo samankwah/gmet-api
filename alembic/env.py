@@ -120,12 +120,16 @@ def run_migrations_online() -> None:
         )
 
     # Convert async drivers to sync drivers for migrations
+    # Using psycopg (psycopg3) as the sync driver for Python 3.13 compatibility
     if url.startswith('postgresql+asyncpg://'):
-        # Async driver → sync driver for migrations
-        url = url.replace('postgresql+asyncpg://', 'postgresql://')
+        # Async driver → sync psycopg3 driver for migrations
+        url = url.replace('postgresql+asyncpg://', 'postgresql+psycopg://')
     elif url.startswith('postgres://'):
-        # Railway format → standard PostgreSQL format
-        url = url.replace('postgres://', 'postgresql://')
+        # Railway/Render format → psycopg3 format
+        url = url.replace('postgres://', 'postgresql+psycopg://')
+    elif url.startswith('postgresql://') and '+' not in url.split('://')[0]:
+        # Plain postgresql:// → psycopg3 format
+        url = url.replace('postgresql://', 'postgresql+psycopg://')
     elif url.startswith('sqlite+aiosqlite://'):
         # Async SQLite → sync SQLite for migrations
         url = url.replace('sqlite+aiosqlite://', 'sqlite://')

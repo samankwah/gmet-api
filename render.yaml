@@ -3,7 +3,7 @@ services:
   - type: web
     name: gmet-weather-api
     env: python
-    # Python version controlled by runtime.txt and .python-version files
+    # Python version must be set explicitly via PYTHON_VERSION env var
     region: oregon  # or frankfurt for EU
     plan: free
     branch: main
@@ -11,6 +11,8 @@ services:
     startCommand: "bash start.sh"
     healthCheckPath: /docs
     envVars:
+      - key: PYTHON_VERSION
+        value: "3.11.9"
       - key: DEBUG
         value: false
       - key: LOG_LEVEL

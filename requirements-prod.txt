@@ -8,7 +8,7 @@ uvicorn[standard]==0.34.0  # Upgraded for better stability
 # Database
 sqlalchemy[asyncio]==2.0.36  # Upgraded for Python 3.13 compatibility
 asyncpg==0.30.0  # Upgraded for Python 3.13 compatibility (has pre-built wheels)
-psycopg2-binary==2.9.9  # Required for sync PostgreSQL migrations with Alembic
+psycopg[binary]==3.2.4  # psycopg3 with binary driver - Python 3.13 compatible, replaces psycopg2
 alembic==1.14.0  # Upgraded for compatibility with SQLAlchemy 2.0.36
 python-dateutil==2.9.0
 
