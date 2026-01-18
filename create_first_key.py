@@ -1,6 +1,6 @@
 """
 Quick script to create the first admin API key.
-Run this once: python create_first_key.py
+Run: python create_first_key.py
 """
 
 import asyncio
@@ -8,12 +8,19 @@ import os
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from sqlalchemy.orm import sessionmaker
 
-# Get database URL from environment
+# Render internal database (use this when running in Render Shell)
+RENDER_DB = {
+    "user": "gmet_weather_6nsz_user",
+    "password": "JVLHyY3wOV4k45yH7cxwMEoyfRhhOUlD",
+    "host": "dpg-d5feauje5dus73bemddg-a",
+    "db": "gmet_weather_6nsz"
+}
+
+# Try DATABASE_URL first, fall back to hardcoded Render credentials
 DATABASE_URL = os.getenv("DATABASE_URL")
 if not DATABASE_URL:
-    print("ERROR: DATABASE_URL environment variable not set")
-    print("Set it with: export DATABASE_URL='postgresql://...'")
-    exit(1)
+    print("No DATABASE_URL found, using Render internal database...")
+    DATABASE_URL = f"postgresql://{RENDER_DB['user']}:{RENDER_DB['password']}@{RENDER_DB['host']}/{RENDER_DB['db']}"
 
 # Convert to async driver if needed
 if DATABASE_URL.startswith("postgres://"):
@@ -45,7 +52,7 @@ async def create_key():
         print(f"\n🔑 API KEY: {plain_key}")
         print("\n⚠️  Save this key! It won't be shown again.")
         print("\nTest with:")
-        print(f"curl -H 'X-API-Key: {plain_key}' https://your-api.onrender.com/api/v1/stations")
+        print(f"curl -H 'X-API-Key: {plain_key}' https://met-api-zrsh.onrender.com/api/v1/stations")
         print("=" * 80 + "\n")
 
     await engine.dispose()
