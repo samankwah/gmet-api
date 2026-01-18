@@ -35,11 +35,17 @@ router = APIRouter(
 limiter = Limiter(key_func=get_remote_address)
 
 
+@router.get("/debug/test")
+async def debug_test():
+    """Simple debug endpoint - no database."""
+    return {"status": "ok", "message": "Debug endpoint working"}
+
+
 @router.get("/debug/stations")
 async def debug_stations(
     db: AsyncSession = Depends(get_db),
 ):
-    """Temporary debug endpoint to list available stations."""
+    """Debug endpoint to list available stations."""
     try:
         # Import from app.models to ensure all models are loaded
         from app.models import Station
