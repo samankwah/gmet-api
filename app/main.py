@@ -53,6 +53,12 @@ async def lifespan(app: FastAPI):
     logger.info("=" * 60)
     logger.warning("Remember to run 'alembic upgrade head' to apply database migrations")
 
+    # Configure SQLAlchemy mappers to resolve all relationships
+    # This must happen after all models are imported (via app.models import in this file)
+    from sqlalchemy.orm import configure_mappers
+    configure_mappers()
+    logger.info("SQLAlchemy mappers configured successfully")
+
     yield
 
     # Shutdown

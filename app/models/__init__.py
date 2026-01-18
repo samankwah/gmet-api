@@ -36,8 +36,3 @@ __all__ = [
     "ClimateNormal",
     "Observation",  # Backward compatibility alias
 ]
-
-# Configure all mappers after all models are imported
-# This resolves bidirectional relationships defined with string references
-from sqlalchemy.orm import configure_mappers
-configure_mappers()
