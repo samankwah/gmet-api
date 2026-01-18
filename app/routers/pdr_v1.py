@@ -35,6 +35,23 @@ router = APIRouter(
 limiter = Limiter(key_func=get_remote_address)
 
 
+@router.get("/debug/stations")
+async def debug_stations(
+    db: AsyncSession = Depends(get_db),
+):
+    """Temporary debug endpoint to list available stations."""
+    try:
+        from app.models.station import Station
+        result = await db.execute(select(Station).limit(10))
+        stations = result.scalars().all()
+        return {
+            "count": len(stations),
+            "stations": [{"id": s.id, "name": s.name, "code": s.code} for s in stations]
+        }
+    except Exception as e:
+        return {"error": str(e), "type": type(e).__name__}
+
+
 @router.get("/current", response_model=CurrentWeatherResponse)
 @limiter.limit("100/minute")
 async def get_current_weather(
@@ -105,105 +122,114 @@ async def get_current_weather(
     """
     logger.info(f"Current weather request for location: {location}")
 
-    # Try to find station by code first (exact match)
-    station = await station_crud.get_by_code(db, code=location.upper())
+    try:
+        # Try to find station by code first (exact match)
+        station = await station_crud.get_by_code(db, code=location.upper())
 
-    # If not found by code, try to find by name (case-insensitive, database query)
-    if not station:
-        from sqlalchemy import or_, func
-        from app.models.station import Station
+        # If not found by code, try to find by name (case-insensitive, database query)
+        if not station:
+            from sqlalchemy import or_, func
+            from app.models.station import Station
 
-        # Use database query instead of loading all stations
-        result = await db.execute(
-            select(Station).where(
-                or_(
-                    func.lower(Station.name) == location.lower(),
-                    func.lower(Station.name).like(f"%{location.lower()}%")
-                )
-            ).limit(1)
-        )
-        station = result.scalar_one_or_none()
+            # Use database query instead of loading all stations
+            result = await db.execute(
+                select(Station).where(
+                    or_(
+                        func.lower(Station.name) == location.lower(),
+                        func.lower(Station.name).like(f"%{location.lower()}%")
+                    )
+                ).limit(1)
+            )
+            station = result.scalar_one_or_none()
 
-        if station:
-            logger.info(f"Station found by name search: {station.name} for query '{location}'")
+            if station:
+                logger.info(f"Station found by name search: {station.name} for query '{location}'")
 
-    if not station:
-        logger.warning(f"Location not found: {location}")
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Location '{location}' not found. Please use a valid city name or station code."
-        )
+        if not station:
+            logger.warning(f"Location not found: {location}")
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Location '{location}' not found. Please use a valid city name or station code."
+            )
 
-    # Try to get daily summary first (preferred for current day data)
-    daily = await daily_summary_crud.get_latest_for_station(db, station_id=station.id)
+        # Try to get daily summary first (preferred for current day data)
+        daily = await daily_summary_crud.get_latest_for_station(db, station_id=station.id)
 
-    # Check if daily summary is recent (within last 24 hours)
-    if daily and (datetime.now(timezone.utc).date() - daily.date).days <= 1:
-        logger.info(f"Current weather from daily summary for {station.name}: min={daily.temp_min}°C, max={daily.temp_max}°C")
+        # Check if daily summary is recent (within last 24 hours)
+        if daily and (datetime.now(timezone.utc).date() - daily.date).days <= 1:
+            logger.info(f"Current weather from daily summary for {station.name}: min={daily.temp_min}°C, max={daily.temp_max}°C")
 
-        # Return as observation format with temp_min and temp_max fields
-        # Calculate average for backward compatibility
-        avg_temp = None
-        if daily.temp_min is not None and daily.temp_max is not None:
-            avg_temp = (daily.temp_min + daily.temp_max) / 2
-        elif daily.temp_min is not None:
-            avg_temp = daily.temp_min
-        elif daily.temp_max is not None:
-            avg_temp = daily.temp_max
+            # Return as observation format with temp_min and temp_max fields
+            # Calculate average for backward compatibility
+            avg_temp = None
+            if daily.temp_min is not None and daily.temp_max is not None:
+                avg_temp = (daily.temp_min + daily.temp_max) / 2
+            elif daily.temp_min is not None:
+                avg_temp = daily.temp_min
+            elif daily.temp_max is not None:
+                avg_temp = daily.temp_max
 
+            return {
+                "id": daily.id,
+                "station_id": daily.station_id,
+                "obs_datetime": datetime.combine(daily.date, time(12, 0), tzinfo=timezone.utc),
+                "temperature": avg_temp,  # For backward compatibility
+                "temp_min": daily.temp_min,  # Separate min temp
+                "temp_max": daily.temp_max,  # Separate max temp
+
+                # Individual RH readings at SYNOP times
+                "rh_0600": daily.rh_0600,
+                "rh_0900": daily.rh_0900,
+                "rh_1200": daily.rh_1200,
+                "rh_1500": daily.rh_1500,
+
+                "relative_humidity": daily.mean_rh,  # Mean RH for backward compatibility
+                "wind_speed": daily.wind_speed,
+                "wind_direction": None,
+                "rainfall": daily.rainfall_total,
+                "pressure": None,
+                "created_at": daily.created_at,
+                "updated_at": daily.updated_at
+            }
+
+        # Fall back to latest synoptic observation
+        observation = await observation_crud.get_latest_for_station(db, station_id=station.id)
+
+        if not observation:
+            logger.warning(f"No observations found for station: {station.name} ({station.code})")
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"No weather observations available for '{location}'. Station: {station.name}"
+            )
+
+        logger.info(f"Current weather from synoptic observation for {station.name}: {observation.temperature}°C")
         return {
-            "id": daily.id,
-            "station_id": daily.station_id,
-            "obs_datetime": datetime.combine(daily.date, time(12, 0), tzinfo=timezone.utc),
-            "temperature": avg_temp,  # For backward compatibility
-            "temp_min": daily.temp_min,  # Separate min temp
-            "temp_max": daily.temp_max,  # Separate max temp
-
-            # Individual RH readings at SYNOP times
-            "rh_0600": daily.rh_0600,
-            "rh_0900": daily.rh_0900,
-            "rh_1200": daily.rh_1200,
-            "rh_1500": daily.rh_1500,
-
-            "relative_humidity": daily.mean_rh,  # Mean RH for backward compatibility
-            "wind_speed": daily.wind_speed,
-            "wind_direction": None,
-            "rainfall": daily.rainfall_total,
-            "pressure": None,
-            "created_at": daily.created_at,
-            "updated_at": daily.updated_at
+            "id": observation.id,
+            "station_id": observation.station_id,
+            "obs_datetime": observation.obs_datetime,
+            "temperature": observation.temperature,
+            "relative_humidity": observation.relative_humidity,
+            "wind_speed": observation.wind_speed,
+            "wind_direction": observation.wind_direction,
+            "rainfall": observation.rainfall,
+            "pressure": observation.pressure,
+            "temp_min": None,  # Not available from synoptic observation
+            "temp_max": None,  # Not available from synoptic observation
+            "rh_0600": None,
+            "rh_0900": None,
+            "rh_1200": None,
+            "rh_1500": None,
+            "created_at": observation.created_at,
+            "updated_at": observation.updated_at
         }
-
-    # Fall back to latest synoptic observation
-    observation = await observation_crud.get_latest_for_station(db, station_id=station.id)
-
-    if not observation:
-        logger.warning(f"No observations found for station: {station.name} ({station.code})")
+    except HTTPException:
+        raise  # Re-raise HTTP exceptions
+    except Exception as e:
+        logger.error(f"Error in get_current_weather: {type(e).__name__}: {e}")
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"No weather observations available for '{location}'. Station: {station.name}"
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Internal error: {type(e).__name__}: {str(e)}"
         )
-
-    logger.info(f"Current weather from synoptic observation for {station.name}: {observation.temperature}°C")
-    return {
-        "id": observation.id,
-        "station_id": observation.station_id,
-        "obs_datetime": observation.obs_datetime,
-        "temperature": observation.temperature,
-        "relative_humidity": observation.relative_humidity,
-        "wind_speed": observation.wind_speed,
-        "wind_direction": observation.wind_direction,
-        "rainfall": observation.rainfall,
-        "pressure": observation.pressure,
-        "temp_min": None,  # Not available from synoptic observation
-        "temp_max": None,  # Not available from synoptic observation
-        "rh_0600": None,
-        "rh_0900": None,
-        "rh_1200": None,
-        "rh_1500": None,
-        "created_at": observation.created_at,
-        "updated_at": observation.updated_at
-    }
 
 
 @router.get("/historical", response_model=List[ObservationResponse])
