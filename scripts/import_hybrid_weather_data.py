@@ -6,17 +6,67 @@ This script imports weather data from CSV into BOTH:
 2. synoptic_observations table - with time-specific readings
 
 Preserves data granularity: min/max temps and time-specific humidity readings.
+
+Supports both SQLite (local dev) and PostgreSQL (production) databases.
 """
 
 import asyncio
+import os
+import sys
 import pandas as pd
 from datetime import datetime, date, timezone
 from collections import defaultdict
-import aiosqlite
 from typing import Dict, List, Tuple, Optional
 
+# Add parent directory to path to import app modules
+sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
+
 CSV_PATH = "gmet_synoptic_data.csv"
-DB_PATH = "gmet_weather.db"
+
+# Determine database type from environment
+def get_db_uri():
+    """Get database URI from environment or settings."""
+    db_uri = os.getenv('SQLALCHEMY_DATABASE_URI') or os.getenv('DATABASE_URL')
+    if db_uri:
+        return db_uri
+    # Fall back to app settings
+    try:
+        from app.config import settings
+        return settings.SQLALCHEMY_DATABASE_URI
+    except ImportError:
+        return "sqlite+aiosqlite:///gmet_weather.db"
+
+DB_URI = get_db_uri()
+IS_POSTGRES = 'postgresql' in DB_URI or 'postgres' in DB_URI
+
+# Mapping from CSV station codes to database station codes (ICAO)
+# CSV uses GMet internal codes, database uses ICAO codes
+CSV_TO_DB_STATION_MAP = {
+    '23016ACC': 'DGAA',   # Accra (Kotoka Airport)
+    '23024TEM': 'DGTM',   # Tema
+    '17009KSI': 'DGSI',   # Kumasi Airport
+    '07006TLE': 'DGLE',   # Tamale Airport
+    '23003TDI': 'DGTK',   # Takoradi Airport
+    '23022SAL': 'DGSP',   # Saltpond
+    '07000BOL': 'DGBG',   # Bolgatanga
+    '04003NAV': 'DGNV',   # Navrongo
+    '01013WA-': 'DGWA',   # Wa
+    '01032SUN': 'DGSN',   # Sunyani
+    '07017HO-': 'DGHO',   # Ho (using first Ho entry)
+    '07058HO-': 'DGHO',   # Ho (alternate - maps to same station)
+    '22050KDA': 'DGKF',   # Koforidua
+    '08010YDI': 'DGYN',   # Yendi
+    '01018WEN': 'DGWN',   # Wenchi
+    '23001AXM': 'DGCC',   # Axim -> Cape Coast (nearest)
+    # Stations without direct DB match (could add later):
+    # '07003AKU': None,   # Akuse
+    # '07008KRA': None,   # Krachie
+    # '14067ABE': None,   # Abetifi
+    # '15076AKA': None,   # Akatsi
+    # '16015BEK': None,   # Bekwai
+    # '21088ODA': None,   # Oda
+    # '23002ADA': None,   # Ada
+}
 
 # Element type constants
 ELEMENT_TX = 'Tx'  # Maximum temperature
@@ -108,7 +158,7 @@ def build_daily_summary(year: int, month: int, day: int, day_data: Dict) -> Opti
     """
     tx_value = None
     tn_value = None
-    rh_values = []
+    rh_by_hour = {}  # Store RH readings by hour: {6: value, 9: value, 12: value, 15: value}
     rr_values = []
     kts_values = []
     p_values = []
@@ -118,14 +168,15 @@ def build_daily_summary(year: int, month: int, day: int, day_data: Dict) -> Opti
     for element_time_key, obs in day_data.items():
         element = obs['element']
         value = obs['value']
+        hour = obs['hour']
 
         if element == ELEMENT_TX:
             tx_value = value
         elif element == ELEMENT_TN:
             tn_value = value
         elif element == ELEMENT_RH:
-            # Collect all RH readings for mean calculation
-            rh_values.append(value)
+            # Store RH reading by observation hour
+            rh_by_hour[hour] = int(min(100, max(0, value)))
         elif element == ELEMENT_RR:
             rr_values.append(value)
         elif element == ELEMENT_KTS:
@@ -136,18 +187,35 @@ def build_daily_summary(year: int, month: int, day: int, day_data: Dict) -> Opti
             sunhr_values.append(value)
 
     # Skip if no meaningful data
-    if not any([tx_value, tn_value, rh_values, rr_values, kts_values, sunhr_values]):
+    if not any([tx_value, tn_value, rh_by_hour, rr_values, kts_values, sunhr_values]):
+        return None
+
+    # Validate date before creating summary
+    try:
+        obs_date = date(year, month, day)
+    except ValueError:
+        # Invalid date (e.g., Feb 30, Apr 31) - skip this entry
         return None
 
     # Build summary
+    obs_datetime = datetime(year, month, day, 9, 0, tzinfo=timezone.utc)
     summary = {
-        'date': date(year, month, day),
+        'date': obs_date,
         'temp_max': tx_value,
-        'temp_max_time': datetime(year, month, day, 9, 0, tzinfo=timezone.utc) if tx_value else None,
+        'temp_max_time': obs_datetime if tx_value else None,
         'temp_min': tn_value,
-        'temp_min_time': datetime(year, month, day, 9, 0, tzinfo=timezone.utc) if tn_value else None,
+        'temp_min_time': obs_datetime if tn_value else None,
         'rainfall_total': sum(rr_values) if rr_values else None,
-        'mean_rh': int(round(sum(rh_values) / len(rh_values))) if rh_values else None,
+
+        # Individual RH readings at SYNOP times
+        'rh_0600': rh_by_hour.get(6),
+        'rh_0900': rh_by_hour.get(9),
+        'rh_1200': rh_by_hour.get(12),
+        'rh_1500': rh_by_hour.get(15),
+
+        # Mean RH for backward compatibility
+        'mean_rh': int(round(sum(rh_by_hour.values()) / len(rh_by_hour))) if rh_by_hour else None,
+
         'wind_speed': round(sum(kts_values) / len(kts_values) * 0.514444, 2) if kts_values else None,  # Convert knots to m/s (mean)
         'sunshine_hours': round(sum(sunhr_values) / len(sunhr_values), 1) if sunhr_values else None
     }
@@ -237,18 +305,144 @@ async def import_hybrid_data(csv_path: str = CSV_PATH, year_start: int = 2024, y
     print("=" * 80)
     print("HYBRID WEATHER DATA IMPORT")
     print("=" * 80)
+    print(f"Database: {'PostgreSQL' if IS_POSTGRES else 'SQLite'}")
     print(f"Importing data from {year_start} to {year_end}")
 
     # Load CSV
     print(f"\nLoading CSV: {csv_path}...")
     df = pd.read_csv(csv_path)
     print(f"Total rows: {len(df):,}")
+    unique_stations = df['Station ID'].nunique()
+    print(f"Unique stations in CSV: {unique_stations}")
 
     # Filter by year range
     df = df[(df['Year'] >= year_start) & (df['Year'] <= year_end)]
     print(f"Filtered to {year_start}-{year_end}: {len(df):,} rows")
 
-    async with aiosqlite.connect(DB_PATH) as db:
+    if IS_POSTGRES:
+        await import_to_postgres(df)
+    else:
+        await import_to_sqlite(df)
+
+
+async def import_to_postgres(df: pd.DataFrame):
+    """Import data to PostgreSQL database."""
+    import asyncpg
+
+    # Convert asyncpg URL format
+    db_url = DB_URI
+    if db_url.startswith('postgresql+asyncpg://'):
+        db_url = db_url.replace('postgresql+asyncpg://', 'postgresql://')
+    elif db_url.startswith('postgres://'):
+        db_url = db_url.replace('postgres://', 'postgresql://')
+
+    conn = await asyncpg.connect(db_url)
+
+    try:
+        # Get stations mapping
+        print("\nFetching stations from database...")
+        rows = await conn.fetch("SELECT id, code FROM stations")
+        db_stations = {row['code']: row['id'] for row in rows}
+        print(f"Found {len(db_stations)} stations in database")
+
+        # Create mapping from CSV station codes to database station IDs
+        stations = {}
+        mapped_count = 0
+        for csv_code, db_code in CSV_TO_DB_STATION_MAP.items():
+            if db_code in db_stations:
+                stations[csv_code] = db_stations[db_code]
+                mapped_count += 1
+        print(f"Mapped {mapped_count} CSV station codes to database stations")
+
+        # Group by station, year, month
+        grouped = df.groupby(['Station ID', 'Year', 'Month'])
+        total_groups = len(grouped)
+        processed_groups = 0
+
+        daily_summaries_created = 0
+        synoptic_obs_created = 0
+        error_count = 0
+
+        # Batch storage
+        daily_summaries_batch = []
+        synoptic_obs_batch = []
+        batch_size = 500  # Smaller batch for PostgreSQL
+
+        print(f"\nProcessing {total_groups} station-month groups...")
+        print("-" * 80)
+
+        for (station_code, year, month), group_df in grouped:
+            processed_groups += 1
+
+            station_id = stations.get(station_code)
+            if not station_id:
+                continue
+
+            # Build day-by-day data structure
+            days_data = build_day_data_structure(group_df)
+
+            # Process each day
+            for day, day_data in days_data.items():
+                # Create daily summary
+                daily_summary = build_daily_summary(year, month, day, day_data)
+                if daily_summary:
+                    daily_summary['station_id'] = station_id
+                    daily_summaries_batch.append(daily_summary)
+                    daily_summaries_created += 1
+
+                # Create synoptic observations
+                synoptic_obs = build_synoptic_observations(year, month, day, day_data)
+                for obs in synoptic_obs:
+                    obs['station_id'] = station_id
+                    synoptic_obs_batch.append(obs)
+                    synoptic_obs_created += 1
+
+            # Batch insert daily summaries
+            if len(daily_summaries_batch) >= batch_size:
+                error_count = await insert_daily_summaries_batch_pg(conn, daily_summaries_batch, error_count)
+                daily_summaries_batch = []
+
+            # Batch insert synoptic observations
+            if len(synoptic_obs_batch) >= batch_size:
+                error_count = await insert_synoptic_obs_batch_pg(conn, synoptic_obs_batch, error_count)
+                synoptic_obs_batch = []
+
+            # Progress update
+            if processed_groups % 50 == 0:
+                print(f"  Progress: {processed_groups}/{total_groups} groups")
+                print(f"    Daily summaries: {daily_summaries_created:,}")
+                print(f"    Synoptic observations: {synoptic_obs_created:,}")
+
+        # Insert remaining batches
+        if daily_summaries_batch:
+            error_count = await insert_daily_summaries_batch_pg(conn, daily_summaries_batch, error_count)
+        if synoptic_obs_batch:
+            error_count = await insert_synoptic_obs_batch_pg(conn, synoptic_obs_batch, error_count)
+
+        print("\n" + "=" * 80)
+        print("IMPORT COMPLETE!")
+        print("=" * 80)
+        print(f"Processed: {processed_groups}/{total_groups} station-month groups")
+        print(f"Daily summaries created: {daily_summaries_created:,}")
+        print(f"Synoptic observations created: {synoptic_obs_created:,}")
+        if error_count > 0:
+            print(f"Errors encountered: {error_count} (see details above)")
+        print("=" * 80)
+
+    finally:
+        await conn.close()
+
+
+async def import_to_sqlite(df: pd.DataFrame):
+    """Import data to SQLite database."""
+    import aiosqlite
+
+    db_path = "gmet_weather.db"
+    if DB_URI.startswith('sqlite'):
+        # Extract path from URI like sqlite+aiosqlite:///path.db
+        db_path = DB_URI.split('///')[-1] if '///' in DB_URI else "gmet_weather.db"
+
+    async with aiosqlite.connect(db_path) as db:
         # Start transaction for data safety
         await db.execute("BEGIN TRANSACTION")
 
@@ -256,8 +450,17 @@ async def import_hybrid_data(csv_path: str = CSV_PATH, year_start: int = 2024, y
             # Get stations mapping
             print("\nFetching stations from database...")
             async with db.execute("SELECT id, code FROM stations") as cursor:
-                stations = {code: sid async for sid, code in cursor}
-            print(f"Found {len(stations)} stations")
+                db_stations = {code: sid async for sid, code in cursor}
+            print(f"Found {len(db_stations)} stations in database")
+
+            # Create mapping from CSV station codes to database station IDs
+            stations = {}
+            mapped_count = 0
+            for csv_code, db_code in CSV_TO_DB_STATION_MAP.items():
+                if db_code in db_stations:
+                    stations[csv_code] = db_stations[db_code]
+                    mapped_count += 1
+            print(f"Mapped {mapped_count} CSV station codes to database stations")
 
             # Group by station, year, month
             grouped = df.groupby(['Station ID', 'Year', 'Month'])
@@ -349,7 +552,89 @@ async def import_hybrid_data(csv_path: str = CSV_PATH, year_start: int = 2024, y
             raise
 
 
-async def insert_daily_summaries_batch(db: aiosqlite.Connection, batch: List[Dict], error_count: int = 0) -> int:
+# PostgreSQL batch insert functions using executemany for speed
+async def insert_daily_summaries_batch_pg(conn, batch: List[Dict], error_count: int = 0) -> int:
+    """Insert batch of daily summaries to PostgreSQL using executemany."""
+    if not batch:
+        return error_count
+
+    try:
+        # Prepare data as list of tuples
+        records = [
+            (
+                summary['station_id'],
+                summary['date'],
+                summary['temp_max'],
+                summary['temp_max_time'],
+                summary['temp_min'],
+                summary['temp_min_time'],
+                summary['rainfall_total'],
+                summary['rh_0600'],
+                summary['rh_0900'],
+                summary['rh_1200'],
+                summary['rh_1500'],
+                summary['mean_rh'],
+                summary['wind_speed'],
+                summary['sunshine_hours']
+            )
+            for summary in batch
+        ]
+
+        await conn.executemany("""
+            INSERT INTO daily_summaries
+            (station_id, date, temp_max, temp_max_time, temp_min, temp_min_time,
+             rainfall_total, rh_0600, rh_0900, rh_1200, rh_1500, mean_rh, wind_speed, sunshine_hours)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+            ON CONFLICT (station_id, date) DO NOTHING
+        """, records)
+
+    except Exception as e:
+        error_count += 1
+        print(f"Error in batch insert of daily summaries: {e}")
+        if error_count > 10:
+            raise RuntimeError(f"Too many batch errors ({error_count}), aborting import")
+
+    return error_count
+
+
+async def insert_synoptic_obs_batch_pg(conn, batch: List[Dict], error_count: int = 0) -> int:
+    """Insert batch of synoptic observations to PostgreSQL using executemany."""
+    if not batch:
+        return error_count
+
+    try:
+        # Prepare data as list of tuples with consistent columns
+        records = [
+            (
+                obs['station_id'],
+                obs['obs_datetime'],
+                obs.get('temperature'),
+                obs.get('relative_humidity'),
+                obs.get('rainfall'),
+                obs.get('wind_speed'),
+                obs.get('pressure')
+            )
+            for obs in batch
+        ]
+
+        await conn.executemany("""
+            INSERT INTO synoptic_observations
+            (station_id, obs_datetime, temperature, relative_humidity, rainfall, wind_speed, pressure)
+            VALUES ($1, $2, $3, $4, $5, $6, $7)
+            ON CONFLICT (station_id, obs_datetime) DO NOTHING
+        """, records)
+
+    except Exception as e:
+        error_count += 1
+        print(f"Error in batch insert of synoptic observations: {e}")
+        if error_count > 10:
+            raise RuntimeError(f"Too many batch errors ({error_count}), aborting import")
+
+    return error_count
+
+
+# SQLite batch insert functions
+async def insert_daily_summaries_batch(db, batch: List[Dict], error_count: int = 0) -> int:
     """
     Insert batch of daily summaries.
 
@@ -369,8 +654,8 @@ async def insert_daily_summaries_batch(db: aiosqlite.Connection, batch: List[Dic
             await db.execute("""
                 INSERT OR IGNORE INTO daily_summaries
                 (station_id, date, temp_max, temp_max_time, temp_min, temp_min_time,
-                 rainfall_total, mean_rh, wind_speed, sunshine_hours)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                 rainfall_total, rh_0600, rh_0900, rh_1200, rh_1500, mean_rh, wind_speed, sunshine_hours)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (
                 summary['station_id'],
                 summary['date'].isoformat(),
@@ -379,6 +664,10 @@ async def insert_daily_summaries_batch(db: aiosqlite.Connection, batch: List[Dic
                 summary['temp_min'],
                 summary['temp_min_time'].isoformat() if summary['temp_min_time'] else None,
                 summary['rainfall_total'],
+                summary['rh_0600'],
+                summary['rh_0900'],
+                summary['rh_1200'],
+                summary['rh_1500'],
                 summary['mean_rh'],
                 summary['wind_speed'],
                 summary['sunshine_hours']
@@ -393,7 +682,7 @@ async def insert_daily_summaries_batch(db: aiosqlite.Connection, batch: List[Dic
     return error_count
 
 
-async def insert_synoptic_obs_batch(db: aiosqlite.Connection, batch: List[Dict], error_count: int = 0) -> int:
+async def insert_synoptic_obs_batch(db, batch: List[Dict], error_count: int = 0) -> int:
     """
     Insert batch of synoptic observations.
 

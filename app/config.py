@@ -181,8 +181,21 @@ class Settings(BaseSettings):
     @classmethod
     def assemble_db_connection(cls, v: Optional[str], info: ValidationInfo) -> str:
         """Assemble database connection string from individual components."""
-        if isinstance(v, str):
+        # Check for explicit SQLALCHEMY_DATABASE_URI first
+        if isinstance(v, str) and v:
             return v
+
+        # Check for DATABASE_URL (Render/Railway/Heroku style)
+        import os
+        database_url = os.getenv('DATABASE_URL')
+        if database_url:
+            # Convert postgres:// to postgresql+asyncpg://
+            if database_url.startswith('postgres://'):
+                database_url = database_url.replace('postgres://', 'postgresql+asyncpg://', 1)
+            elif database_url.startswith('postgresql://'):
+                database_url = database_url.replace('postgresql://', 'postgresql+asyncpg://', 1)
+            return database_url
+
         values = info.data
         db_name = values.get('POSTGRES_DB')
 
