@@ -17,7 +17,7 @@ from slowapi.util import get_remote_address
 from app.database import get_db
 from app.dependencies.auth import get_api_key, get_api_key_optional
 from app.models.api_key import APIKey
-from app.schemas.weather import ObservationResponse
+from app.schemas.weather import ObservationResponse, CurrentWeatherResponse
 from app.crud.weather import station as station_crud, observation as observation_crud, daily_summary as daily_summary_crud
 from app.utils.logging_config import get_logger
 
@@ -35,7 +35,7 @@ router = APIRouter(
 limiter = Limiter(key_func=get_remote_address)
 
 
-@router.get("/current", response_model=ObservationResponse)
+@router.get("/current", response_model=CurrentWeatherResponse)
 @limiter.limit("100/minute")
 async def get_current_weather(
     request: Request,
@@ -185,7 +185,25 @@ async def get_current_weather(
         )
 
     logger.info(f"Current weather from synoptic observation for {station.name}: {observation.temperature}°C")
-    return observation
+    return {
+        "id": observation.id,
+        "station_id": observation.station_id,
+        "obs_datetime": observation.obs_datetime,
+        "temperature": observation.temperature,
+        "relative_humidity": observation.relative_humidity,
+        "wind_speed": observation.wind_speed,
+        "wind_direction": observation.wind_direction,
+        "rainfall": observation.rainfall,
+        "pressure": observation.pressure,
+        "temp_min": None,  # Not available from synoptic observation
+        "temp_max": None,  # Not available from synoptic observation
+        "rh_0600": None,
+        "rh_0900": None,
+        "rh_1200": None,
+        "rh_1500": None,
+        "created_at": observation.created_at,
+        "updated_at": observation.updated_at
+    }
 
 
 @router.get("/historical", response_model=List[ObservationResponse])

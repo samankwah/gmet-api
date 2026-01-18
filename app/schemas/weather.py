@@ -224,6 +224,35 @@ StationResponse = Station
 ObservationResponse = Observation
 
 
+class CurrentWeatherResponse(BaseSchema, IDSchema, TimestampSchema):
+    """
+    Flexible response schema for current weather endpoint.
+
+    This schema accepts both synoptic observations and daily summaries,
+    including separate min/max temperatures when available from daily data.
+    """
+    station_id: int
+    obs_datetime: datetime
+
+    # Standard observation fields
+    temperature: Optional[float] = Field(None, description="Current or average temperature in °C")
+    relative_humidity: Optional[int] = Field(None, description="Relative humidity %")
+    wind_speed: Optional[float] = Field(None, description="Wind speed in m/s")
+    wind_direction: Optional[float] = Field(None, description="Wind direction in degrees")
+    rainfall: Optional[float] = Field(None, description="Rainfall in mm")
+    pressure: Optional[float] = Field(None, description="Atmospheric pressure in hPa")
+
+    # Extended fields from daily summaries
+    temp_min: Optional[float] = Field(None, description="Minimum temperature in °C (from daily summary)")
+    temp_max: Optional[float] = Field(None, description="Maximum temperature in °C (from daily summary)")
+
+    # Individual RH readings at SYNOP times
+    rh_0600: Optional[int] = Field(None, description="Relative humidity at 0600 UTC")
+    rh_0900: Optional[int] = Field(None, description="Relative humidity at 0900 UTC")
+    rh_1200: Optional[int] = Field(None, description="Relative humidity at 1200 UTC")
+    rh_1500: Optional[int] = Field(None, description="Relative humidity at 1500 UTC")
+
+
 class WeatherQueryParams(BaseModel):
     """Query parameters for weather data requests."""
     start_date: Optional[datetime] = None
@@ -269,13 +298,42 @@ class DailySummaryBase(BaseSchema):
         description="Total 24-hour rainfall in mm"
     )
 
-    # Other statistics
+    # Relative humidity statistics
+    # Individual RH readings at SYNOP observation times
+    rh_0600: Optional[int] = Field(
+        None,
+        ge=0,
+        le=100,
+        description="Relative humidity at 0600 UTC in % (0-100)"
+    )
+    rh_0900: Optional[int] = Field(
+        None,
+        ge=0,
+        le=100,
+        description="Relative humidity at 0900 UTC in % (0-100)"
+    )
+    rh_1200: Optional[int] = Field(
+        None,
+        ge=0,
+        le=100,
+        description="Relative humidity at 1200 UTC in % (0-100)"
+    )
+    rh_1500: Optional[int] = Field(
+        None,
+        ge=0,
+        le=100,
+        description="Relative humidity at 1500 UTC in % (0-100)"
+    )
+
+    # Mean RH (kept for backward compatibility)
     mean_rh: Optional[int] = Field(
         None,
         ge=0,
         le=100,
         description="Mean relative humidity in % (average of 0600, 0900, 1200, 1500 observations)"
     )
+
+    # Wind and sunshine statistics
     wind_speed: Optional[float] = Field(
         None,
         ge=0,
