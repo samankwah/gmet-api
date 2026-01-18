@@ -36,6 +36,16 @@ async_session = sessionmaker(
 Base = declarative_base()
 
 
+def _configure_models():
+    """Import all models to ensure SQLAlchemy mappers are properly configured."""
+    # This must be done before any database queries to resolve relationships
+    import app.models  # noqa: F401
+
+
+# Configure models at module load time
+_configure_models()
+
+
 async def get_db() -> AsyncSession:
     """
     Dependency function to get database session.
