@@ -41,7 +41,8 @@ async def debug_stations(
 ):
     """Temporary debug endpoint to list available stations."""
     try:
-        from app.models.station import Station
+        # Import from app.models to ensure all models are loaded
+        from app.models import Station
         result = await db.execute(select(Station).limit(10))
         stations = result.scalars().all()
         return {
@@ -49,7 +50,8 @@ async def debug_stations(
             "stations": [{"id": s.id, "name": s.name, "code": s.code} for s in stations]
         }
     except Exception as e:
-        return {"error": str(e), "type": type(e).__name__}
+        import traceback
+        return {"error": str(e), "type": type(e).__name__, "traceback": traceback.format_exc()}
 
 
 @router.get("/current", response_model=CurrentWeatherResponse)
@@ -129,7 +131,7 @@ async def get_current_weather(
         # If not found by code, try to find by name (case-insensitive, database query)
         if not station:
             from sqlalchemy import or_, func
-            from app.models.station import Station
+            from app.models import Station  # Import from app.models to ensure all models are loaded
 
             # Use database query instead of loading all stations
             result = await db.execute(
