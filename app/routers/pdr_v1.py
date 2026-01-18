@@ -15,7 +15,7 @@ from slowapi import Limiter
 from slowapi.util import get_remote_address
 
 from app.database import get_db
-from app.dependencies.auth import get_api_key
+from app.dependencies.auth import get_api_key, get_api_key_optional
 from app.models.api_key import APIKey
 from app.schemas.weather import ObservationResponse
 from app.crud.weather import station as station_crud, observation as observation_crud, daily_summary as daily_summary_crud
@@ -45,13 +45,15 @@ async def get_current_weather(
         examples=["Accra", "Kumasi", "DGAA"]
     ),
     db: AsyncSession = Depends(get_db),
-    api_key: APIKey = Security(get_api_key),
+    api_key: Optional[APIKey] = Security(get_api_key_optional),
 ):
     """
     Get current weather observations for a location.
 
     This endpoint provides the most recent weather data for a specified location.
     The location can be either a city name (e.g., 'Accra') or a station code (e.g., 'DGAA').
+
+    **🔓 Public Endpoint:** No authentication required. API key is optional.
 
     **PDR Specification:** `/v1/current?location=Accra`
 
@@ -65,7 +67,7 @@ async def get_current_weather(
     - Observation timestamp
     - Station information
 
-    **Rate limit:** 100 requests per minute
+    **Rate limit:** 100 requests per minute (unauthenticated)
 
     **Example:**
     ```
@@ -93,7 +95,7 @@ async def get_current_weather(
         request: FastAPI request object
         location: City name or station code
         db: Database session
-        api_key: Valid API key
+        api_key: Optional API key (not required for this endpoint)
 
     Returns:
         ObservationResponse: Latest weather observation
@@ -218,13 +220,15 @@ async def get_historical_weather(
     limit: int = Query(1000, ge=1, le=10000, description="Maximum number of records to return"),
     skip: int = Query(0, ge=0, description="Number of records to skip"),
     db: AsyncSession = Depends(get_db),
-    api_key: APIKey = Security(get_api_key),
+    api_key: Optional[APIKey] = Security(get_api_key_optional),
 ):
     """
     Get historical weather data for a specified time period.
 
     Retrieve weather observations within a date range, optionally filtered by station
     and specific weather parameter.
+
+    **🔓 Public Endpoint:** No authentication required. API key is optional.
 
     **PDR Specification:** `/v1/historical?station=Tamale&start=YYYY-MM-DD&end=YYYY-MM-DD&param=rainfall`
 
@@ -236,7 +240,7 @@ async def get_historical_weather(
     - `limit`: Maximum records to return (default: 1000, max: 10000)
     - `skip`: Pagination offset
 
-    **Rate limit:** 100 requests per minute
+    **Rate limit:** 100 requests per minute (unauthenticated)
 
     **Example:**
     ```
@@ -255,7 +259,7 @@ async def get_historical_weather(
         limit: Maximum records to return
         skip: Pagination offset
         db: Database session
-        api_key: Valid API key
+        api_key: Optional API key (not required for this endpoint)
 
     Returns:
         List[ObservationResponse]: List of historical observations
@@ -402,7 +406,7 @@ async def get_daily_summaries(
     limit: int = Query(100, ge=1, le=1000, description="Maximum records to return"),
     skip: int = Query(0, ge=0, description="Number of records to skip"),
     db: AsyncSession = Depends(get_db),
-    api_key: APIKey = Security(get_api_key),
+    api_key: Optional[APIKey] = Security(get_api_key_optional),
 ):
     """
     Get daily weather summaries with separate min/max temperatures.
@@ -412,6 +416,8 @@ async def get_daily_summaries(
     - Mean relative humidity
     - Total 24-hour rainfall
     - Maximum wind gust
+
+    **🔓 Public Endpoint:** No authentication required. API key is optional.
 
     **Example:**
     ```
@@ -441,7 +447,7 @@ async def get_daily_summaries(
         limit: Maximum records to return
         skip: Number of records to skip
         db: Database session
-        api_key: Valid API key
+        api_key: Optional API key (not required for this endpoint)
 
     Returns:
         List of daily summary records

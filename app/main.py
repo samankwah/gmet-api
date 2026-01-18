@@ -194,9 +194,15 @@ RESTful API providing comprehensive weather and climate data for Ghana.
 
 ### 🔐 Authentication
 
-All endpoints require API key authentication via the `X-API-Key` header (except public station listings).
+**Public endpoints (no API key required):**
+- `GET /v1/current` - Get current weather for any location
+- `GET /v1/historical` - Get historical weather data
+- `GET /v1/daily-summaries/{station_code}` - Get daily weather summaries
 
-**To use the API:**
+**Protected endpoints (API key required):**
+- Admin endpoints, data modification, and internal APIs require an API key via the `X-API-Key` header
+
+**To authenticate for protected endpoints:**
 1. Obtain an API key from your GMet administrator
 2. Click the **"Authorize"** button above (🔓 icon)
 3. Enter your API key in the `X-API-Key` field
@@ -281,6 +287,8 @@ GET /api/v1/agro/onset-cessation?station_code=04003NAV&year=2024&season=MAM
             "name": "Public Weather API (v1)",
             "description": """**Official public-facing weather API** - Use these endpoints for external applications.
 
+**🔓 No API key required for these endpoints!**
+
 **Features:**
 - User-friendly location input (city names or station codes)
 - Daily weather summaries (min/max temperatures)
@@ -291,7 +299,7 @@ GET /api/v1/agro/onset-cessation?station_code=04003NAV&year=2024&season=MAM
 
 **Best for:** Mobile apps, dashboards, public integrations, external applications
 
-**Example:** `/v1/current?location=Accra` - Get current weather in Accra"""
+**Example:** `/v1/current?location=Accra` - Get current weather in Accra (no API key needed!)"""
         },
         {
             "name": "Weather Data Management",

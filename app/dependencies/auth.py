@@ -5,8 +5,9 @@ This module contains dependency injection functions for authentication
 and authorization.
 """
 
-from fastapi import Depends, HTTPException, status, Request
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from typing import Optional
+from fastapi import Depends, HTTPException, status, Request, Security
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials, APIKeyHeader
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
@@ -128,18 +129,26 @@ async def get_current_user(
     return user_obj
 
 
+# Define the API key header security scheme for Swagger UI
+api_key_header_scheme = APIKeyHeader(
+    name="X-API-Key",
+    scheme_name="ApiKeyAuth",  # Must match the name in OpenAPI schema
+    auto_error=False  # Don't auto-raise, we'll handle errors manually
+)
+
+
 async def get_api_key(
-    request: Request,
+    api_key_value: str = Security(api_key_header_scheme),
     db: AsyncSession = Depends(get_db)
 ) -> APIKey:
     """
-    Get and validate API key from request headers.
+    Get and validate API key from X-API-Key header.
 
-    Reads X-API-Key header and validates it against the APIKey model.
-    Returns the APIKey object if valid.
+    Uses FastAPI's Security system to properly document the API key requirement
+    in OpenAPI/Swagger UI, while maintaining backward compatibility with existing clients.
 
     Args:
-        request: FastAPI request object
+        api_key_value: API key from X-API-Key header (extracted by FastAPI)
         db: Database session
 
     Returns:
@@ -148,9 +157,6 @@ async def get_api_key(
     Raises:
         HTTPException: 401 if API key is missing, invalid, or inactive
     """
-    # Extract API key from X-API-Key header
-    api_key_value = request.headers.get("X-API-Key")
-    
     if not api_key_value:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -174,6 +180,38 @@ async def get_api_key(
             detail="API key is inactive",
             headers={"WWW-Authenticate": "ApiKey"},
         )
+
+    return api_key_obj
+
+
+async def get_api_key_optional(
+    api_key_value: str = Security(api_key_header_scheme),
+    db: AsyncSession = Depends(get_db)
+) -> Optional[APIKey]:
+    """
+    Optional API key validation - returns None instead of 401 if not provided.
+
+    This allows endpoints to work without authentication while still supporting
+    authenticated access for higher rate limits or additional features.
+
+    Args:
+        api_key_value: API key from X-API-Key header (extracted by FastAPI)
+        db: Database session
+
+    Returns:
+        APIKey instance if valid, None if not provided or invalid
+    """
+    if not api_key_value:
+        return None  # Allow unauthenticated access
+
+    # Verify the API key if provided
+    api_key_obj = await api_key_crud.verify_and_get(db, plain_key=api_key_value)
+
+    if not api_key_obj:
+        return None  # Invalid key, but still allow access (just not authenticated)
+
+    if not api_key_obj.is_active:
+        return None  # Inactive key, but still allow access
 
     return api_key_obj
 
