@@ -35,31 +35,6 @@ router = APIRouter(
 limiter = Limiter(key_func=get_remote_address)
 
 
-@router.get("/debug/test")
-async def debug_test():
-    """Simple debug endpoint - no database."""
-    return {"status": "ok", "message": "Debug endpoint working"}
-
-
-@router.get("/debug/stations")
-async def debug_stations(
-    db: AsyncSession = Depends(get_db),
-):
-    """Debug endpoint to list available stations."""
-    try:
-        # Import from app.models to ensure all models are loaded
-        from app.models import Station
-        result = await db.execute(select(Station).limit(10))
-        stations = result.scalars().all()
-        return {
-            "count": len(stations),
-            "stations": [{"id": s.id, "name": s.name, "code": s.code} for s in stations]
-        }
-    except Exception as e:
-        import traceback
-        return {"error": str(e), "type": type(e).__name__, "traceback": traceback.format_exc()}
-
-
 @router.get("/current", response_model=CurrentWeatherResponse)
 @limiter.limit("100/minute")
 async def get_current_weather(
