@@ -224,7 +224,7 @@ StationResponse = Station
 ObservationResponse = Observation
 
 
-class CurrentWeatherResponse(BaseSchema, IDSchema, TimestampSchema):
+class CurrentWeatherResponse(IDSchema, TimestampSchema):
     """
     Flexible response schema for current weather endpoint.
 
