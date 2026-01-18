@@ -52,7 +52,7 @@ async def create_key():
         print(f"\n🔑 API KEY: {plain_key}")
         print("\n⚠️  Save this key! It won't be shown again.")
         print("\nTest with:")
-        print(f"curl -H 'X-API-Key: {plain_key}' https://met-api-zrsh.onrender.com/api/v1/stations")
+        print(f"curl -H 'X-API-Key: {plain_key}' https://gmet-weather-api.onrender.com/v1/current?location=Accra")
         print("=" * 80 + "\n")
 
     await engine.dispose()
