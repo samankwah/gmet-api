@@ -23,6 +23,9 @@ from app.routers.agro import router as agro_router
 from app.api.v1.endpoints.api_keys import router as api_keys_router
 from app.utils.logging_config import setup_logging, get_logger
 
+# Import all models to ensure SQLAlchemy relationships are properly configured
+import app.models  # noqa: F401 - triggers import of all model classes
+
 # Initialize logging
 setup_logging()
 logger = get_logger(__name__)
