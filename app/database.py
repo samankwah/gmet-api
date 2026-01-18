@@ -40,6 +40,9 @@ def _configure_models():
     """Import all models to ensure SQLAlchemy mappers are properly configured."""
     # This must be done before any database queries to resolve relationships
     import app.models  # noqa: F401
+    # Explicitly configure all mappers to resolve relationships
+    from sqlalchemy.orm import configure_mappers
+    configure_mappers()
 
 
 # Configure models at module load time
