@@ -7,19 +7,14 @@ from app.models.station import Station
 from app.models.synoptic_observation import SynopticObservation
 from app.models.daily_summary import DailySummary
 
-# Phase 1 Climate Products
-from app.models.weekly_summary import WeeklySummary
-from app.models.monthly_summary import MonthlySummary
-
-# Phase 2 Climate Products
-from app.models.dekadal_summary import DekadalSummary
-from app.models.seasonal_summary import SeasonalSummary
-from app.models.annual_summary import AnnualSummary
-from app.models.climate_normal import ClimateNormal
-
 # Backward compatibility: keep Observation as alias for SynopticObservation
 # This allows existing code to continue working during migration
 from app.models.synoptic_observation import SynopticObservation as Observation
+
+# NOTE: Phase 1/2 Climate Products (WeeklySummary, MonthlySummary, DekadalSummary,
+# SeasonalSummary, AnnualSummary, ClimateNormal) are not imported here to avoid
+# SQLAlchemy mapper configuration errors. They can be re-added when those features
+# are implemented and the Station model relationships are restored.
 
 __all__ = [
     "BaseModel",
@@ -28,11 +23,5 @@ __all__ = [
     "Station",
     "SynopticObservation",
     "DailySummary",
-    "WeeklySummary",
-    "MonthlySummary",
-    "DekadalSummary",
-    "SeasonalSummary",
-    "AnnualSummary",
-    "ClimateNormal",
     "Observation",  # Backward compatibility alias
 ]
