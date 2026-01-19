@@ -36,31 +36,12 @@ async_session = sessionmaker(
 Base = declarative_base()
 
 
-_models_configured = False
-
-
-def _configure_models():
-    """Import all models to ensure SQLAlchemy mappers are properly configured."""
-    global _models_configured
-    if _models_configured:
-        return
-    # This must be done before any database queries to resolve relationships
-    import app.models  # noqa: F401
-    # Explicitly configure all mappers to resolve relationships
-    from sqlalchemy.orm import configure_mappers
-    configure_mappers()
-    _models_configured = True
-
-
 async def get_db() -> AsyncSession:
     """
     Dependency function to get database session.
 
     Yields an async database session and ensures proper cleanup.
     """
-    # Ensure models are configured before any database access
-    _configure_models()
-
     async with async_session() as session:
         try:
             yield session

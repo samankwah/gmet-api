@@ -23,9 +23,6 @@ from app.routers.agro import router as agro_router
 from app.api.v1.endpoints.api_keys import router as api_keys_router
 from app.utils.logging_config import setup_logging, get_logger
 
-# Import all models to ensure SQLAlchemy relationships are properly configured
-import app.models  # noqa: F401 - triggers import of all model classes
-
 # Initialize logging
 setup_logging()
 logger = get_logger(__name__)
@@ -52,12 +49,6 @@ async def lifespan(app: FastAPI):
     logger.info(f"Database: {settings.SQLALCHEMY_DATABASE_URI.split('://')[0]}")
     logger.info("=" * 60)
     logger.warning("Remember to run 'alembic upgrade head' to apply database migrations")
-
-    # Configure SQLAlchemy mappers to resolve all relationships
-    # This must happen after all models are imported (via app.models import in this file)
-    from sqlalchemy.orm import configure_mappers
-    configure_mappers()
-    logger.info("SQLAlchemy mappers configured successfully")
 
     yield
 
